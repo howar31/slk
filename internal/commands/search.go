@@ -79,12 +79,13 @@ func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
 		Use:   "channels",
 		Short: "List channels",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(g)
 			if err != nil {
 				return err
 			}
 			pages, err := client.CallAll("conversations.list",
-				map[string]string{"limit": "200", "types": "public_channel,private_channel"}, 10)
+				map[string]string{"limit": "200", "types": "public_channel,private_channel", "exclude_archived": "true"}, 10)
 			if err != nil {
 				return err
 			}
@@ -116,31 +117,16 @@ func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
 func newSearchUsersCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "users",
-		Short: "List users",
+		Short: "List workspace users (search surface)",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(g)
 			if err != nil {
 				return err
 			}
-			pages, err := client.CallAll("users.list", map[string]string{"limit": "200"}, 10)
+			hits, err := fetchUsers(client)
 			if err != nil {
 				return err
-			}
-			var hits []searchHit
-			for _, raw := range pages {
-				var resp struct {
-					Members []struct {
-						ID       string `json:"id"`
-						Name     string `json:"name"`
-						RealName string `json:"real_name"`
-					} `json:"members"`
-				}
-				if err := json.Unmarshal(raw, &resp); err != nil {
-					return err
-				}
-				for _, m := range resp.Members {
-					hits = append(hits, searchHit{Name: m.Name, ID: m.ID, Extra: m.RealName})
-				}
 			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
 		},

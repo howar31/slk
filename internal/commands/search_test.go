@@ -4,9 +4,9 @@ import "testing"
 
 func TestSearchHit_Concise(t *testing.T) {
 	h := searchHit{Name: "general", ID: "C1", Extra: "42 members"}
-	got := h.Concise()
-	if got == "" || got == "C1" {
-		t.Fatalf("concise should combine fields, got %q", got)
+	want := "general (C1) — 42 members"
+	if got := h.Concise(); got != want {
+		t.Fatalf("Concise() = %q, want %q", got, want)
 	}
 }
 
