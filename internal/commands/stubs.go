@@ -2,7 +2,6 @@ package commands
 
 import "github.com/spf13/cobra"
 
-func newAPICommand(*GlobalFlags) *cobra.Command     { return &cobra.Command{Use: "api"} }
 func newAuthCommand(*GlobalFlags) *cobra.Command    { return &cobra.Command{Use: "auth"} }
 func newMsgCommand(*GlobalFlags) *cobra.Command     { return &cobra.Command{Use: "msg"} }
 func newThreadCommand(*GlobalFlags) *cobra.Command  { return &cobra.Command{Use: "thread"} }
