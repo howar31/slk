@@ -9,9 +9,35 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// userProfile holds trimmed fields from users.profile.get.
+type userProfile struct {
+	DisplayName string `json:"display_name"`
+	RealName    string `json:"real_name"`
+	Title       string `json:"title"`
+	Email       string `json:"email,omitempty"`
+	Phone       string `json:"phone,omitempty"`
+	StatusText  string `json:"status_text,omitempty"`
+	StatusEmoji string `json:"status_emoji,omitempty"`
+	TZ          string `json:"tz,omitempty"`
+}
+
+func (p userProfile) Concise() string {
+	s := p.DisplayName
+	if p.RealName != "" && p.RealName != p.DisplayName {
+		s = fmt.Sprintf("%s (%s)", p.DisplayName, p.RealName)
+	}
+	if p.Title != "" {
+		s += " — " + p.Title
+	}
+	if p.StatusText != "" {
+		s += "  ·  " + p.StatusEmoji + " " + p.StatusText
+	}
+	return s
+}
+
 func newUserCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{Use: "user", Short: "List and inspect users"}
-	cmd.AddCommand(newUserListCommand(g), newUserInfoCommand(g))
+	cmd.AddCommand(newUserListCommand(g), newUserInfoCommand(g), newUserProfileCommand(g))
 	return cmd
 }
 
@@ -96,5 +122,64 @@ func newUserInfoCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&userID, "user", "", "user ID")
 	cmd.MarkFlagRequired("user")
+	return cmd
+}
+
+func newUserProfileCommand(g *GlobalFlags) *cobra.Command {
+	var userID string
+	var includeLocale bool
+	cmd := &cobra.Command{
+		Use:   "profile",
+		Short: "Show a user's profile fields",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			params := map[string]string{}
+			if userID != "" {
+				params["user"] = userID
+			}
+			if includeLocale {
+				params["include_locale"] = "true"
+			}
+			raw, err := client.Call("users.profile.get", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			var resp struct {
+				Profile struct {
+					DisplayName string `json:"display_name"`
+					RealName    string `json:"real_name"`
+					Title       string `json:"title"`
+					Email       string `json:"email"`
+					Phone       string `json:"phone"`
+					StatusText  string `json:"status_text"`
+					StatusEmoji string `json:"status_emoji"`
+					TZ          string `json:"tz"`
+				} `json:"profile"`
+			}
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				return err
+			}
+			p := userProfile{
+				DisplayName: resp.Profile.DisplayName,
+				RealName:    resp.Profile.RealName,
+				Title:       resp.Profile.Title,
+				Email:       resp.Profile.Email,
+				Phone:       resp.Profile.Phone,
+				StatusText:  resp.Profile.StatusText,
+				StatusEmoji: resp.Profile.StatusEmoji,
+				TZ:          resp.Profile.TZ,
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, []userProfile{p})
+		},
+	}
+	cmd.Flags().StringVar(&userID, "user", "", "user ID (defaults to current user when empty)")
+	cmd.Flags().BoolVar(&includeLocale, "include-locale", false, "include locale in response")
 	return cmd
 }
