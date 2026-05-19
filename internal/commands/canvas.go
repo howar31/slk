@@ -15,6 +15,7 @@ func newCanvasCommand(g *GlobalFlags) *cobra.Command {
 
 // canvasDocumentContent builds the document_content param for canvas methods.
 func canvasDocumentContent(markdown string) string {
+	// json.Marshal cannot fail here: the input is a plain string map.
 	b, _ := json.Marshal(map[string]string{"type": "markdown", "markdown": markdown})
 	return string(b)
 }
@@ -44,7 +45,7 @@ func newCanvasCreateCommand(g *GlobalFlags) *cobra.Command {
 			var resp struct {
 				CanvasID string `json:"canvas_id"`
 			}
-			json.Unmarshal(raw, &resp)
+			_ = json.Unmarshal(raw, &resp)
 			fmt.Fprintf(cmd.OutOrStdout(), "created canvas %s\n", resp.CanvasID)
 			return nil
 		},
@@ -86,6 +87,7 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 		Use:   "update",
 		Short: "Replace a canvas's content",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// json.Marshal cannot fail here: the input is a plain string map.
 			changes, _ := json.Marshal([]map[string]any{
 				{"operation": "replace", "document_content": map[string]string{
 					"type": "markdown", "markdown": markdown,

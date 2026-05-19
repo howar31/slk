@@ -19,3 +19,17 @@ func TestCanvasCreate_DryRun(t *testing.T) {
 		t.Fatalf("dry-run output = %q", out.String())
 	}
 }
+
+func TestCanvasUpdate_DryRun(t *testing.T) {
+	g := &GlobalFlags{DryRun: true}
+	cmd := newCanvasCommand(g)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"update", "--id", "F123", "--markdown", "# new"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out.String(), "canvases.edit") {
+		t.Fatalf("dry-run output = %q", out.String())
+	}
+}

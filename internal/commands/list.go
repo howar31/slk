@@ -42,7 +42,7 @@ func newListCreateCommand(g *GlobalFlags) *cobra.Command {
 					ID string `json:"id"`
 				} `json:"list"`
 			}
-			json.Unmarshal(raw, &resp)
+			_ = json.Unmarshal(raw, &resp)
 			fmt.Fprintf(cmd.OutOrStdout(), "created list %s\n", resp.List.ID)
 			return nil
 		},
