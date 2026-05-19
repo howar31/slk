@@ -31,6 +31,20 @@ func TestMsgSend_DryRun(t *testing.T) {
 	}
 }
 
+func TestMsgRead_FlagsRegistered(t *testing.T) {
+	g := &GlobalFlags{}
+	cmd := newMsgCommand(g)
+	read, _, err := cmd.Find([]string{"read"})
+	if err != nil {
+		t.Fatalf("find read: %v", err)
+	}
+	for _, name := range []string{"oldest", "latest", "cursor", "channel", "limit"} {
+		if read.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag --%s on msg read", name)
+		}
+	}
+}
+
 func TestMsgUpdateDelete_DryRun(t *testing.T) {
 	for _, tc := range []struct {
 		name string

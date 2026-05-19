@@ -45,7 +45,7 @@ func newMsgCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
-	var channel string
+	var channel, oldest, latest, cursor string
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "read",
@@ -55,10 +55,20 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			raw, err := client.Call("conversations.history", map[string]string{
+			params := map[string]string{
 				"channel": channel,
 				"limit":   fmt.Sprintf("%d", limit),
-			}, nil)
+			}
+			if oldest != "" {
+				params["oldest"] = oldest
+			}
+			if latest != "" {
+				params["latest"] = latest
+			}
+			if cursor != "" {
+				params["cursor"] = cursor
+			}
+			raw, err := client.Call("conversations.history", params, nil)
 			if err != nil {
 				return err
 			}
@@ -92,6 +102,9 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&channel, "channel", "", "channel ID or user ID for a DM")
 	cmd.Flags().IntVar(&limit, "limit", 50, "max messages")
+	cmd.Flags().StringVar(&oldest, "oldest", "", "start of time range (ts)")
+	cmd.Flags().StringVar(&latest, "latest", "", "end of time range (ts)")
+	cmd.Flags().StringVar(&cursor, "cursor", "", "pagination cursor")
 	cmd.MarkFlagRequired("channel")
 	return cmd
 }
