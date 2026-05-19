@@ -7,8 +7,11 @@ func TestExitCodeFor(t *testing.T) {
 		"invalid_auth":      3,
 		"token_expired":     3,
 		"not_authed":        3,
+		"account_inactive":  3,
 		"channel_not_found": 4,
 		"user_not_found":    4,
+		"thread_not_found":  4,
+		"message_not_found": 4,
 		"ratelimited":       5,
 		"something_else":    1,
 	}

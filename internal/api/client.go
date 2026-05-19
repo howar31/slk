@@ -43,13 +43,18 @@ func (c *Client) Call(method string, params map[string]string, body []byte) ([]b
 		if err != nil {
 			return nil, err
 		}
-		raw, _ := io.ReadAll(resp.Body)
+		raw, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("%s: reading response body: %w", method, err)
+		}
 
-		if resp.StatusCode == http.StatusTooManyRequests && attempt < c.MaxRetries {
-			wait := parseRetryAfter(resp.Header.Get("Retry-After"))
-			time.Sleep(wait)
-			continue
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if attempt < c.MaxRetries {
+				time.Sleep(parseRetryAfter(resp.Header.Get("Retry-After")))
+				continue
+			}
+			return nil, &APIError{Method: method, SlackError: "ratelimited"}
 		}
 
 		var envelope struct {

@@ -1,21 +1,27 @@
 package api
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // CallAll repeatedly calls method, following response_metadata.next_cursor,
 // until the cursor is empty or maxPages is reached. Returns one raw response
 // per page.
 func (c *Client) CallAll(method string, params map[string]string, maxPages int) ([][]byte, error) {
-	if params == nil {
-		params = map[string]string{}
+	// Copy the caller's map so we never mutate it.
+	p := make(map[string]string, len(params))
+	for k, v := range params {
+		p[k] = v
 	}
+
 	var pages [][]byte
 	cursor := ""
 	for i := 0; i < maxPages; i++ {
 		if cursor != "" {
-			params["cursor"] = cursor
+			p["cursor"] = cursor
 		}
-		raw, err := c.Call(method, params, nil)
+		raw, err := c.Call(method, p, nil)
 		if err != nil {
 			return pages, err
 		}
@@ -26,7 +32,9 @@ func (c *Client) CallAll(method string, params map[string]string, maxPages int) 
 				NextCursor string `json:"next_cursor"`
 			} `json:"response_metadata"`
 		}
-		json.Unmarshal(raw, &meta)
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			return pages, fmt.Errorf("%s page %d: metadata unmarshal: %w", method, i+1, err)
+		}
 		cursor = meta.ResponseMetadata.NextCursor
 		if cursor == "" {
 			break
