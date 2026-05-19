@@ -77,9 +77,15 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 			if err := json.Unmarshal(raw, &resp); err != nil {
 				return err
 			}
+			r := newResolver(g, client)
 			items := make([]msgItem, len(resp.Messages))
 			for i, m := range resp.Messages {
-				items[i] = msgItem{User: m.User, Text: m.Text, TS: m.TS, Thread: m.ThreadTS}
+				items[i] = msgItem{
+					User:   resolveUser(r, m.User),
+					Text:   m.Text,
+					TS:     m.TS,
+					Thread: m.ThreadTS,
+				}
 			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, items)
 		},
