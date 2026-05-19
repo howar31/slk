@@ -15,7 +15,8 @@ func newThreadCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
-	var channel, ts string
+	var channel, ts, oldest, latest, cursor string
+	var limit int
 	cmd := &cobra.Command{
 		Use:   "read",
 		Short: "Read replies in a thread",
@@ -24,9 +25,21 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			raw, err := client.Call("conversations.replies", map[string]string{
-				"channel": channel, "ts": ts,
-			}, nil)
+			params := map[string]string{
+				"channel": channel,
+				"ts":      ts,
+				"limit":   fmt.Sprintf("%d", limit),
+			}
+			if oldest != "" {
+				params["oldest"] = oldest
+			}
+			if latest != "" {
+				params["latest"] = latest
+			}
+			if cursor != "" {
+				params["cursor"] = cursor
+			}
+			raw, err := client.Call("conversations.replies", params, nil)
 			if err != nil {
 				return err
 			}
@@ -54,6 +67,10 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
 	cmd.Flags().StringVar(&ts, "ts", "", "parent message ts")
+	cmd.Flags().IntVar(&limit, "limit", 100, "max replies")
+	cmd.Flags().StringVar(&oldest, "oldest", "", "start of time range (ts)")
+	cmd.Flags().StringVar(&latest, "latest", "", "end of time range (ts)")
+	cmd.Flags().StringVar(&cursor, "cursor", "", "pagination cursor")
 	cmd.MarkFlagRequired("channel")
 	cmd.MarkFlagRequired("ts")
 	return cmd

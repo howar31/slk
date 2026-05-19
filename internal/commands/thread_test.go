@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+func TestThreadRead_FlagsRegistered(t *testing.T) {
+	g := &GlobalFlags{}
+	cmd := newThreadCommand(g)
+	read, _, err := cmd.Find([]string{"read"})
+	if err != nil {
+		t.Fatalf("find read: %v", err)
+	}
+	for _, name := range []string{"oldest", "latest", "cursor", "limit", "channel", "ts"} {
+		if read.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag --%s on thread read", name)
+		}
+	}
+}
+
 func TestThreadReply_DryRun(t *testing.T) {
 	g := &GlobalFlags{DryRun: true}
 	cmd := newThreadCommand(g)
