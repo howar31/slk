@@ -65,7 +65,7 @@ func (c *Client) Call(method string, params map[string]string, body []byte) ([]b
 			return nil, fmt.Errorf("%s: invalid JSON response: %w", method, err)
 		}
 		if !envelope.OK {
-			if envelope.Error == "ratelimited" && attempt < c.MaxRetries {
+			if (envelope.Error == "ratelimited" || envelope.Error == "rate_limited") && attempt < c.MaxRetries {
 				time.Sleep(time.Second * time.Duration(attempt+1))
 				continue
 			}

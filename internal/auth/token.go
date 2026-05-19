@@ -13,21 +13,21 @@ func ResolveToken(cfg *Config, profileName, identity, envToken string) (string, 
 		name = cfg.Active
 	}
 	if name == "" {
-		return "", fmt.Errorf("no profile selected; run 'slk auth set-token' or set SLK_TOKEN")
+		return "", &AuthError{Reason: "no profile selected; run 'slk auth set-token' or set SLK_TOKEN"}
 	}
 	p, ok := cfg.Profiles[name]
 	if !ok {
-		return "", fmt.Errorf("profile %q not found", name)
+		return "", &AuthError{Reason: fmt.Sprintf("profile %q not found", name)}
 	}
 	switch identity {
 	case "bot":
 		if p.BotToken == "" {
-			return "", fmt.Errorf("profile %q has no bot token", name)
+			return "", &AuthError{Reason: fmt.Sprintf("profile %q has no bot token", name)}
 		}
 		return p.BotToken, nil
 	default:
 		if p.UserToken == "" {
-			return "", fmt.Errorf("profile %q has no user token", name)
+			return "", &AuthError{Reason: fmt.Sprintf("profile %q has no user token", name)}
 		}
 		return p.UserToken, nil
 	}

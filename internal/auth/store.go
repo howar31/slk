@@ -25,8 +25,8 @@ type Config struct {
 	Profiles map[string]Profile `toml:"profiles"`
 }
 
-// DefaultPath returns ~/.config/slk/config.toml.
-func DefaultPath() (string, error) {
+// defaultPath returns ~/.config/slk/config.toml.
+func defaultPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -39,7 +39,7 @@ func ConfigPath() (string, error) {
 	if p := os.Getenv("SLK_CONFIG"); p != "" {
 		return p, nil
 	}
-	return DefaultPath()
+	return defaultPath()
 }
 
 // Load reads the config; a missing file yields an empty Config and no error.

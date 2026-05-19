@@ -8,6 +8,15 @@ import (
 	"github.com/howar31/slk/internal/auth"
 )
 
+// profileName returns the effective profile: the --profile flag if set,
+// otherwise the SLK_PROFILE env var.
+func profileName(g *GlobalFlags) string {
+	if g.Profile != "" {
+		return g.Profile
+	}
+	return os.Getenv("SLK_PROFILE")
+}
+
 // buildClient resolves the active token and returns a ready API client.
 func buildClient(g *GlobalFlags) (*api.Client, error) {
 	path, err := auth.ConfigPath()
@@ -18,7 +27,7 @@ func buildClient(g *GlobalFlags) (*api.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	token, err := auth.ResolveToken(cfg, g.Profile, g.Identity, os.Getenv("SLK_TOKEN"))
+	token, err := auth.ResolveToken(cfg, profileName(g), g.Identity, os.Getenv("SLK_TOKEN"))
 	if err != nil {
 		return nil, err
 	}
