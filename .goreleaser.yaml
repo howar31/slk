@@ -1,0 +1,18 @@
+version: 2
+project_name: slk
+builds:
+  - main: ./cmd/slk
+    binary: slk
+    env: [CGO_ENABLED=0]
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+archives:
+  - formats: [tar.gz]
+brews:
+  - repository:
+      owner: howar31
+      name: homebrew-tap
+    description: Agent-facing Slack CLI
+    license: MIT
