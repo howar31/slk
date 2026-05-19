@@ -1,0 +1,90 @@
+package commands
+
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/howar31/slk/internal/output"
+	"github.com/spf13/cobra"
+)
+
+func newThreadCommand(g *GlobalFlags) *cobra.Command {
+	cmd := &cobra.Command{Use: "thread", Short: "Read and reply to threads"}
+	cmd.AddCommand(newThreadReadCommand(g), newThreadReplyCommand(g))
+	return cmd
+}
+
+func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
+	var channel, ts string
+	cmd := &cobra.Command{
+		Use:   "read",
+		Short: "Read replies in a thread",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.replies", map[string]string{
+				"channel": channel, "ts": ts,
+			}, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			var resp struct {
+				Messages []struct {
+					User string `json:"user"`
+					Text string `json:"text"`
+					TS   string `json:"ts"`
+				} `json:"messages"`
+			}
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				return err
+			}
+			items := make([]msgItem, len(resp.Messages))
+			for i, m := range resp.Messages {
+				items[i] = msgItem{User: m.User, Text: m.Text, TS: m.TS}
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, items)
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&ts, "ts", "", "parent message ts")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("ts")
+	return cmd
+}
+
+func newThreadReplyCommand(g *GlobalFlags) *cobra.Command {
+	var channel, thread, text string
+	cmd := &cobra.Command{
+		Use:   "reply",
+		Short: "Reply within a thread",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "thread_ts": thread, "text": text}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postMessage %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			if _, err := client.Call("chat.postMessage", params, nil); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "replied")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&thread, "thread", "", "parent message ts")
+	cmd.Flags().StringVar(&text, "text", "", "reply text")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("thread")
+	cmd.MarkFlagRequired("text")
+	return cmd
+}
