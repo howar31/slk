@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/howar31/slk/internal/auth"
 	"github.com/spf13/cobra"
@@ -39,7 +40,9 @@ func newAuthSetTokenCommand() *cobra.Command {
 				return err
 			}
 			p := cfg.Profiles[profile]
-			p.Workspace = workspace
+			if workspace != "" {
+				p.Workspace = workspace
+			}
 			if userToken != "" {
 				p.UserToken = userToken
 			}
@@ -137,15 +140,18 @@ func newAuthLogoutCommand() *cobra.Command {
 }
 
 func newAuthLoginCommand() *cobra.Command {
-	var profile, clientID, clientSecret, scopes, port string
+	var profile, workspace, clientID, clientSecret, scopes, port string
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Run the OAuth flow with your own Slack app credentials",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			redirectURI := "http://localhost:" + port + "/callback"
-			authURL := fmt.Sprintf(
-				"https://slack.com/oauth/v2/authorize?client_id=%s&user_scope=%s&redirect_uri=%s",
-				clientID, scopes, redirectURI)
+			q := url.Values{
+				"client_id":    {clientID},
+				"user_scope":   {scopes},
+				"redirect_uri": {redirectURI},
+			}
+			authURL := "https://slack.com/oauth/v2/authorize?" + q.Encode()
 			fmt.Fprintf(cmd.OutOrStdout(), "Open this URL to authorize:\n%s\n", authURL)
 
 			code, err := auth.WaitForCode(":"+port, "/callback")
@@ -162,6 +168,9 @@ func newAuthLoginCommand() *cobra.Command {
 				return err
 			}
 			p := cfg.Profiles[profile]
+			if workspace != "" {
+				p.Workspace = workspace
+			}
 			p.ClientID = clientID
 			p.ClientSecret = clientSecret
 			if pair.UserToken != "" {
@@ -182,6 +191,7 @@ func newAuthLoginCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&profile, "profile", "default", "profile name")
+	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace label")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "your Slack app client ID")
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "your Slack app client secret")
 	cmd.Flags().StringVar(&scopes, "scopes", "channels:history,channels:read,chat:write,users:read", "comma-separated user scopes")

@@ -2,7 +2,6 @@ package commands
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,5 +35,7 @@ func TestAuthSetTokenAndStatus(t *testing.T) {
 	if !strings.Contains(out.String(), "work") {
 		t.Fatalf("status missing profile: %q", out.String())
 	}
-	_ = os.Unsetenv("SLK_CONFIG")
+	if strings.Contains(out.String(), "xoxp-x") {
+		t.Fatalf("status output leaked the raw token: %q", out.String())
+	}
 }
