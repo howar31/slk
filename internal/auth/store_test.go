@@ -19,7 +19,10 @@ func TestStore_SaveLoadRoundTrip(t *testing.T) {
 	if err := Save(path, cfg); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	info, _ := os.Stat(path)
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("config perms = %o, want 600", info.Mode().Perm())
 	}

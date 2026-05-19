@@ -65,9 +65,11 @@ func Save(path string, cfg *Config) error {
 	}
 	if err := toml.NewEncoder(f).Encode(cfg); err != nil {
 		f.Close()
+		os.Remove(tmp)
 		return err
 	}
 	if err := f.Close(); err != nil {
+		os.Remove(tmp)
 		return err
 	}
 	return os.Rename(tmp, path)

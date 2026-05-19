@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,7 +31,10 @@ func ExchangeCode(baseURL, clientID, clientSecret, code, redirectURI string) (To
 		return TokenPair{}, err
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return TokenPair{}, fmt.Errorf("oauth: reading response: %w", err)
+	}
 
 	var r struct {
 		OK          bool   `json:"ok"`
@@ -64,12 +68,19 @@ func WaitForCode(addr, callbackPath string) (string, error) {
 		codeCh <- code
 	})
 	srv := &http.Server{Addr: addr, Handler: mux}
-	go srv.ListenAndServe()
+	errCh := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+	}()
 	defer srv.Shutdown(context.Background())
 
 	select {
 	case code := <-codeCh:
 		return code, nil
+	case err := <-errCh:
+		return "", fmt.Errorf("oauth: callback server failed: %w", err)
 	case <-time.After(5 * time.Minute):
 		return "", fmt.Errorf("oauth: timed out waiting for callback")
 	}
