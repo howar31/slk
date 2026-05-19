@@ -84,29 +84,9 @@ func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pages, err := client.CallAll("conversations.list",
-				map[string]string{"limit": "200", "types": "public_channel,private_channel", "exclude_archived": "true"}, 10)
+			hits, err := fetchChannels(client, true)
 			if err != nil {
 				return err
-			}
-			var hits []searchHit
-			for _, raw := range pages {
-				var resp struct {
-					Channels []struct {
-						ID         string `json:"id"`
-						Name       string `json:"name"`
-						NumMembers int    `json:"num_members"`
-					} `json:"channels"`
-				}
-				if err := json.Unmarshal(raw, &resp); err != nil {
-					return err
-				}
-				for _, c := range resp.Channels {
-					hits = append(hits, searchHit{
-						Name: c.Name, ID: c.ID,
-						Extra: fmt.Sprintf("%d members", c.NumMembers),
-					})
-				}
 			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
 		},

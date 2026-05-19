@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/howar31/slk/internal/api"
 	"github.com/howar31/slk/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -25,33 +26,14 @@ func newChannelListCommand(g *GlobalFlags) *cobra.Command {
 		Use:   "list",
 		Short: "List channels",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(g)
 			if err != nil {
 				return err
 			}
-			pages, err := client.CallAll("conversations.list",
-				map[string]string{"limit": "200", "types": "public_channel,private_channel"}, 10)
+			hits, err := fetchChannels(client, false)
 			if err != nil {
 				return err
-			}
-			var hits []searchHit
-			for _, raw := range pages {
-				var resp struct {
-					Channels []struct {
-						ID         string `json:"id"`
-						Name       string `json:"name"`
-						NumMembers int    `json:"num_members"`
-					} `json:"channels"`
-				}
-				if err := json.Unmarshal(raw, &resp); err != nil {
-					return err
-				}
-				for _, c := range resp.Channels {
-					hits = append(hits, searchHit{
-						Name: c.Name, ID: c.ID,
-						Extra: fmt.Sprintf("%d members", c.NumMembers),
-					})
-				}
 			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
 		},
@@ -87,7 +69,7 @@ func newChannelCreateCommand(g *GlobalFlags) *cobra.Command {
 					ID string `json:"id"`
 				} `json:"channel"`
 			}
-			json.Unmarshal(raw, &resp)
+			_ = json.Unmarshal(raw, &resp)
 			fmt.Fprintf(cmd.OutOrStdout(), "created channel %s\n", resp.Channel.ID)
 			return nil
 		},
@@ -181,4 +163,40 @@ func newChannelTopicCommand(g *GlobalFlags) *cobra.Command {
 	cmd.MarkFlagRequired("channel")
 	cmd.MarkFlagRequired("topic")
 	return cmd
+}
+
+// fetchChannels pages through conversations.list and returns trimmed channel hits.
+func fetchChannels(client *api.Client, excludeArchived bool) ([]searchHit, error) {
+	params := map[string]string{
+		"limit": "200",
+		"types": "public_channel,private_channel",
+	}
+	if excludeArchived {
+		params["exclude_archived"] = "true"
+	}
+	pages, err := client.CallAll("conversations.list", params, 10)
+	if err != nil {
+		return nil, err
+	}
+	var hits []searchHit
+	for _, raw := range pages {
+		var resp struct {
+			Channels []struct {
+				ID         string `json:"id"`
+				Name       string `json:"name"`
+				NumMembers int    `json:"num_members"`
+			} `json:"channels"`
+		}
+		if err := json.Unmarshal(raw, &resp); err != nil {
+			return nil, err
+		}
+		for _, c := range resp.Channels {
+			hits = append(hits, searchHit{
+				Name:  c.Name,
+				ID:    c.ID,
+				Extra: fmt.Sprintf("%d members", c.NumMembers),
+			})
+		}
+	}
+	return hits, nil
 }
