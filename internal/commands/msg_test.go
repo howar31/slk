@@ -8,8 +8,12 @@ import (
 
 func TestMsgMessage_Concise(t *testing.T) {
 	m := msgItem{User: "Bob", Text: "hi", TS: "1779191572.0"}
-	if got := m.Concise(); !strings.Contains(got, "Bob") || !strings.Contains(got, "hi") {
-		t.Fatalf("concise = %q", got)
+	got := m.Concise()
+	if !strings.Contains(got, "Bob") || !strings.Contains(got, "hi") {
+		t.Fatalf("concise = %q: missing User or Text", got)
+	}
+	if !strings.Contains(got, "[") {
+		t.Fatalf("concise = %q: missing timestamp bracket (shortTS output)", got)
 	}
 }
 

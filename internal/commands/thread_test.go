@@ -15,7 +15,14 @@ func TestThreadReply_DryRun(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if !strings.Contains(out.String(), "reply!") {
-		t.Fatalf("dry-run output = %q", out.String())
+	got := out.String()
+	if !strings.Contains(got, "reply!") {
+		t.Fatalf("dry-run output = %q: missing text 'reply!'", got)
+	}
+	if !strings.Contains(got, "C1") {
+		t.Fatalf("dry-run output = %q: missing channel 'C1'", got)
+	}
+	if !strings.Contains(got, "thread_ts") {
+		t.Fatalf("dry-run output = %q: missing 'thread_ts' param", got)
 	}
 }

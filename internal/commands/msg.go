@@ -101,7 +101,7 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 				params["thread_ts"] = threadTS
 			}
 			if g.DryRun {
-				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postMessage channel=%s text=%q\n", channel, text)
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postMessage %v\n", params)
 				return nil
 			}
 			client, err := buildClient(g)
@@ -112,8 +112,11 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "sent")
-			_ = raw
+			var resp struct {
+				TS string `json:"ts"`
+			}
+			_ = json.Unmarshal(raw, &resp)
+			fmt.Fprintf(cmd.OutOrStdout(), "sent %s\n", resp.TS)
 			return nil
 		},
 	}
