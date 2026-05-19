@@ -10,7 +10,7 @@ import (
 
 // buildClient resolves the active token and returns a ready API client.
 func buildClient(g *GlobalFlags) (*api.Client, error) {
-	path, err := auth.DefaultPath()
+	path, err := auth.ConfigPath()
 	if err != nil {
 		return nil, err
 	}

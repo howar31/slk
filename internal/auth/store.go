@@ -34,6 +34,14 @@ func DefaultPath() (string, error) {
 	return filepath.Join(home, ".config", "slk", "config.toml"), nil
 }
 
+// ConfigPath returns the config path, honoring the SLK_CONFIG env override.
+func ConfigPath() (string, error) {
+	if p := os.Getenv("SLK_CONFIG"); p != "" {
+		return p, nil
+	}
+	return DefaultPath()
+}
+
 // Load reads the config; a missing file yields an empty Config and no error.
 func Load(path string) (*Config, error) {
 	cfg := &Config{Profiles: map[string]Profile{}}
