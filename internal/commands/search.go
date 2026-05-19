@@ -139,9 +139,10 @@ func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newSearchUsersCommand(g *GlobalFlags) *cobra.Command {
+	var query string
 	cmd := &cobra.Command{
 		Use:   "users",
-		Short: "List workspace users (search surface)",
+		Short: "List/search workspace users (client-side filter)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(g)
@@ -152,8 +153,20 @@ func newSearchUsersCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if query != "" {
+				q := strings.ToLower(query)
+				filtered := hits[:0]
+				for _, h := range hits {
+					if strings.Contains(strings.ToLower(h.Name), q) ||
+						strings.Contains(strings.ToLower(h.Extra), q) {
+						filtered = append(filtered, h)
+					}
+				}
+				hits = filtered
+			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
 		},
 	}
+	cmd.Flags().StringVar(&query, "query", "", "filter users whose name/real_name contains this substring (case-insensitive)")
 	return cmd
 }
