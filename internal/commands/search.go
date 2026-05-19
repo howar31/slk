@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/howar31/slk/internal/output"
 	"github.com/spf13/cobra"
@@ -75,22 +76,65 @@ func newSearchMessagesCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
+	var query string
+	var includeArchived bool
+	var channelTypes string
 	cmd := &cobra.Command{
 		Use:   "channels",
-		Short: "List channels",
+		Short: "List/search channels (client-side filter)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(g)
 			if err != nil {
 				return err
 			}
-			hits, err := fetchChannels(client, true)
+			params := map[string]string{
+				"limit": "200",
+				"types": channelTypes,
+			}
+			if !includeArchived {
+				params["exclude_archived"] = "true"
+			}
+			pages, err := client.CallAll("conversations.list", params, 10)
 			if err != nil {
 				return err
+			}
+			var hits []searchHit
+			for _, raw := range pages {
+				var resp struct {
+					Channels []struct {
+						ID         string `json:"id"`
+						Name       string `json:"name"`
+						NumMembers int    `json:"num_members"`
+					} `json:"channels"`
+				}
+				if err := json.Unmarshal(raw, &resp); err != nil {
+					return err
+				}
+				for _, c := range resp.Channels {
+					hits = append(hits, searchHit{
+						Name:  c.Name,
+						ID:    c.ID,
+						Extra: fmt.Sprintf("%d members", c.NumMembers),
+					})
+				}
+			}
+			if query != "" {
+				q := strings.ToLower(query)
+				filtered := hits[:0]
+				for _, h := range hits {
+					if strings.Contains(strings.ToLower(h.Name), q) {
+						filtered = append(filtered, h)
+					}
+				}
+				hits = filtered
 			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
 		},
 	}
+	cmd.Flags().StringVar(&query, "query", "", "filter channels whose name contains this substring (case-insensitive)")
+	cmd.Flags().BoolVar(&includeArchived, "include-archived", false, "include archived channels")
+	cmd.Flags().StringVar(&channelTypes, "channel-types", "public_channel,private_channel", "comma-separated channel types: public_channel,private_channel")
 	return cmd
 }
 

@@ -2,6 +2,19 @@ package commands
 
 import "testing"
 
+func TestSearchChannels_FlagsRegistered(t *testing.T) {
+	cmd := newSearchCommand(&GlobalFlags{})
+	ch, _, err := cmd.Find([]string{"channels"})
+	if err != nil {
+		t.Fatalf("find channels: %v", err)
+	}
+	for _, name := range []string{"query", "include-archived", "channel-types"} {
+		if ch.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag --%s on search channels", name)
+		}
+	}
+}
+
 func TestSearchHit_Concise(t *testing.T) {
 	h := searchHit{Name: "general", ID: "C1", Extra: "42 members"}
 	want := "general (C1) — 42 members"
