@@ -25,7 +25,9 @@ func buildClient(g *GlobalFlags) (*api.Client, error) {
 	return api.New(token), nil
 }
 
-// cacheDir returns ~/.config/slk/cache.
+// cacheDir returns ~/.config/slk/cache. Consumed by the ID resolver wired in
+// Task 9.2 (newResolver); defined here alongside buildClient as shared command
+// infrastructure.
 func cacheDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
