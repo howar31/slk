@@ -82,22 +82,53 @@ func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
-	var canvasID, markdown string
+	var canvasID, markdown, action, sectionID string
 	cmd := &cobra.Command{
 		Use:   "update",
-		Short: "Replace a canvas's content",
+		Short: "Update a canvas's content",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// json.Marshal cannot fail here: the input is a plain string map.
-			changes, _ := json.Marshal([]map[string]any{
-				{"operation": "replace", "document_content": map[string]string{
-					"type": "markdown", "markdown": markdown,
-				}},
-			})
-			params := map[string]string{"canvas_id": canvasID, "changes": string(changes)}
+			// Resolve operation from (action, sectionID).
+			var operation string
+			switch action {
+			case "replace":
+				operation = "replace"
+			case "prepend":
+				if sectionID != "" {
+					operation = "insert_before_specific_section"
+				} else {
+					operation = "insert_at_start"
+				}
+			case "append":
+				if sectionID != "" {
+					operation = "insert_after_specific_section"
+				} else {
+					operation = "insert_at_end"
+				}
+			default:
+				return fmt.Errorf("unknown --action %q (want replace|prepend|append)", action)
+			}
+
 			if g.DryRun {
-				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] canvases.edit canvas_id=%s\n", canvasID)
+				fmt.Fprintf(cmd.OutOrStdout(),
+					"[dry-run] canvases.edit canvas_id=%s operation=%s section_id=%s\n",
+					canvasID, operation, sectionID)
 				return nil
 			}
+
+			// Build the change object.
+			change := map[string]any{
+				"operation": operation,
+				"document_content": map[string]string{
+					"type":     "markdown",
+					"markdown": markdown,
+				},
+			}
+			if sectionID != "" {
+				change["section_id"] = sectionID
+			}
+			changes, _ := json.Marshal([]map[string]any{change})
+			params := map[string]string{"canvas_id": canvasID, "changes": string(changes)}
+
 			client, err := buildClient(g)
 			if err != nil {
 				return err
@@ -111,6 +142,8 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&canvasID, "id", "", "canvas ID")
 	cmd.Flags().StringVar(&markdown, "markdown", "", "new canvas body in markdown")
+	cmd.Flags().StringVar(&action, "action", "replace", "edit action: replace (default), prepend, append")
+	cmd.Flags().StringVar(&sectionID, "section-id", "", "optional section ID to target")
 	cmd.MarkFlagRequired("id")
 	cmd.MarkFlagRequired("markdown")
 	return cmd
