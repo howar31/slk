@@ -1,3 +1,4 @@
+// Command slk is an agent-facing Slack CLI.
 package main
 
 import (

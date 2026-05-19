@@ -13,7 +13,8 @@ func TestRootCommand_Version(t *testing.T) {
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if got := out.String(); got == "" || !bytes.Contains(out.Bytes(), []byte("test-version")) {
+	got := out.Bytes()
+	if len(got) == 0 || !bytes.Contains(got, []byte("test-version")) {
 		t.Fatalf("expected version output to contain test-version, got %q", got)
 	}
 }
