@@ -2,6 +2,7 @@ package output
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"reflect"
 	"strings"
@@ -44,14 +45,18 @@ func emitTable(w io.Writer, v reflect.Value) error {
 	for i, c := range cols {
 		headers[i] = strings.ToUpper(c)
 	}
-	io.WriteString(tw, strings.Join(headers, "\t")+"\n")
+	if _, err := fmt.Fprintln(tw, strings.Join(headers, "\t")); err != nil {
+		return err
+	}
 	for i := 0; i < v.Len(); i++ {
 		row := v.Index(i)
 		cells := make([]string, elemType.NumField())
 		for j := 0; j < elemType.NumField(); j++ {
 			cells[j] = toCell(row.Field(j))
 		}
-		io.WriteString(tw, strings.Join(cells, "\t")+"\n")
+		if _, err := fmt.Fprintln(tw, strings.Join(cells, "\t")); err != nil {
+			return err
+		}
 	}
 	return tw.Flush()
 }
