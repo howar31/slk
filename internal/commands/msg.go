@@ -220,12 +220,19 @@ func newMsgReactCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
-	var channel, text, at string
+	var channel, text, at, thread string
+	var replyBroadcast bool
 	cmd := &cobra.Command{
 		Use:   "schedule",
 		Short: "Schedule a message for a future time",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "text": text, "post_at": at}
+			if thread != "" {
+				params["thread_ts"] = thread
+			}
+			if replyBroadcast && thread != "" {
+				params["reply_broadcast"] = "true"
+			}
 			if g.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.scheduleMessage %v\n", params)
 				return nil
@@ -244,6 +251,8 @@ func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
 	cmd.Flags().StringVar(&text, "text", "", "message text")
 	cmd.Flags().StringVar(&at, "at", "", "Unix timestamp to post at")
+	cmd.Flags().StringVar(&thread, "thread", "", "optional thread parent ts")
+	cmd.Flags().BoolVar(&replyBroadcast, "reply-broadcast", false, "also broadcast a threaded reply to the channel (requires --thread)")
 	cmd.MarkFlagRequired("channel")
 	cmd.MarkFlagRequired("text")
 	cmd.MarkFlagRequired("at")

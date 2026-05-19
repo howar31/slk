@@ -57,6 +57,20 @@ func TestMsgSend_ReplyBroadcastFlag(t *testing.T) {
 	}
 }
 
+func TestMsgSchedule_ThreadAndBroadcastFlags(t *testing.T) {
+	g := &GlobalFlags{}
+	cmd := newMsgCommand(g)
+	sch, _, err := cmd.Find([]string{"schedule"})
+	if err != nil {
+		t.Fatalf("find schedule: %v", err)
+	}
+	for _, name := range []string{"thread", "reply-broadcast"} {
+		if sch.Flags().Lookup(name) == nil {
+			t.Errorf("missing --%s on msg schedule", name)
+		}
+	}
+}
+
 func TestMsgUpdateDelete_DryRun(t *testing.T) {
 	for _, tc := range []struct {
 		name string
