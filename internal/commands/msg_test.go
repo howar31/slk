@@ -45,6 +45,18 @@ func TestMsgRead_FlagsRegistered(t *testing.T) {
 	}
 }
 
+func TestMsgSend_ReplyBroadcastFlag(t *testing.T) {
+	g := &GlobalFlags{}
+	cmd := newMsgCommand(g)
+	send, _, err := cmd.Find([]string{"send"})
+	if err != nil {
+		t.Fatalf("find send: %v", err)
+	}
+	if send.Flags().Lookup("reply-broadcast") == nil {
+		t.Fatal("missing --reply-broadcast flag")
+	}
+}
+
 func TestMsgUpdateDelete_DryRun(t *testing.T) {
 	for _, tc := range []struct {
 		name string

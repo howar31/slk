@@ -111,6 +111,7 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 
 func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 	var channel, text, threadTS string
+	var replyBroadcast bool
 	cmd := &cobra.Command{
 		Use:   "send",
 		Short: "Send a message to a channel or DM",
@@ -118,6 +119,9 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 			params := map[string]string{"channel": channel, "text": text}
 			if threadTS != "" {
 				params["thread_ts"] = threadTS
+			}
+			if replyBroadcast && threadTS != "" {
+				params["reply_broadcast"] = "true"
 			}
 			if g.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postMessage %v\n", params)
@@ -142,6 +146,7 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&channel, "channel", "", "channel ID or user ID")
 	cmd.Flags().StringVar(&text, "text", "", "message text")
 	cmd.Flags().StringVar(&threadTS, "thread", "", "reply in this thread ts")
+	cmd.Flags().BoolVar(&replyBroadcast, "reply-broadcast", false, "also broadcast a threaded reply to the channel (requires --thread)")
 	cmd.MarkFlagRequired("channel")
 	cmd.MarkFlagRequired("text")
 	return cmd
