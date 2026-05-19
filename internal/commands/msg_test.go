@@ -97,3 +97,38 @@ func TestMsgUpdateDelete_DryRun(t *testing.T) {
 		})
 	}
 }
+
+func TestMsgDraft_DryRun(t *testing.T) {
+	g := &GlobalFlags{DryRun: true}
+	cmd := newMsgCommand(g)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"draft", "--channel", "C1", "--text", "hello draft"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out.String(), "drafts.create") || !strings.Contains(out.String(), "hello draft") {
+		t.Fatalf("dry-run output = %q", out.String())
+	}
+}
+
+func TestNewUUID_FormatV4(t *testing.T) {
+	u := newUUID()
+	parts := strings.Split(u, "-")
+	if len(parts) != 5 {
+		t.Fatalf("expected 5 segments, got %d (%q)", len(parts), u)
+	}
+	if len(parts[0]) != 8 || len(parts[1]) != 4 || len(parts[2]) != 4 || len(parts[3]) != 4 || len(parts[4]) != 12 {
+		t.Fatalf("segment lengths wrong: %v", parts)
+	}
+	if parts[2][0] != '4' {
+		t.Errorf("version byte not 4: %s", parts[2])
+	}
+}
+
+func TestTextToBlocks_RoundTrip(t *testing.T) {
+	out := textToBlocks("hi")
+	if !strings.Contains(out, `"rich_text"`) || !strings.Contains(out, `"text":"hi"`) {
+		t.Fatalf("blocks JSON malformed: %s", out)
+	}
+}
