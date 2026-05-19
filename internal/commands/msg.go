@@ -33,7 +33,14 @@ func shortTS(ts string) string {
 
 func newMsgCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{Use: "msg", Short: "Read and send messages"}
-	cmd.AddCommand(newMsgReadCommand(g), newMsgSendCommand(g))
+	cmd.AddCommand(
+		newMsgReadCommand(g),
+		newMsgSendCommand(g),
+		newMsgWriteCommand(g, "update", "chat.update", []string{"channel", "ts", "text"}),
+		newMsgWriteCommand(g, "delete", "chat.delete", []string{"channel", "ts"}),
+		newMsgReactCommand(g),
+		newMsgScheduleCommand(g),
+	)
 	return cmd
 }
 
@@ -115,5 +122,103 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&threadTS, "thread", "", "reply in this thread ts")
 	cmd.MarkFlagRequired("channel")
 	cmd.MarkFlagRequired("text")
+	return cmd
+}
+
+// newMsgWriteCommand builds a simple write command mapping required flags to
+// Slack form params of the same name.
+func newMsgWriteCommand(g *GlobalFlags, use, method string, flags []string) *cobra.Command {
+	values := map[string]*string{}
+	cmd := &cobra.Command{
+		Use:   use,
+		Short: use + " a message",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{}
+			for _, f := range flags {
+				params[f] = *values[f]
+			}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] %s %v\n", method, params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			if _, err := client.Call(method, params, nil); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), use+" ok")
+			return nil
+		},
+	}
+	for _, f := range flags {
+		v := new(string)
+		values[f] = v
+		cmd.Flags().StringVar(v, f, "", f+" value")
+		cmd.MarkFlagRequired(f)
+	}
+	return cmd
+}
+
+func newMsgReactCommand(g *GlobalFlags) *cobra.Command {
+	var channel, ts, emoji string
+	cmd := &cobra.Command{
+		Use:   "react",
+		Short: "Add an emoji reaction to a message",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "timestamp": ts, "name": emoji}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] reactions.add %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			if _, err := client.Call("reactions.add", params, nil); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "reacted")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&ts, "ts", "", "message timestamp")
+	cmd.Flags().StringVar(&emoji, "emoji", "", "emoji name without colons")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("ts")
+	cmd.MarkFlagRequired("emoji")
+	return cmd
+}
+
+func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
+	var channel, text, at string
+	cmd := &cobra.Command{
+		Use:   "schedule",
+		Short: "Schedule a message for a future time",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "text": text, "post_at": at}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.scheduleMessage %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			if _, err := client.Call("chat.scheduleMessage", params, nil); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "scheduled")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&text, "text", "", "message text")
+	cmd.Flags().StringVar(&at, "at", "", "Unix timestamp to post at")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("text")
+	cmd.MarkFlagRequired("at")
 	return cmd
 }

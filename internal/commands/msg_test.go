@@ -26,3 +26,30 @@ func TestMsgSend_DryRun(t *testing.T) {
 		t.Fatalf("dry-run output = %q", out.String())
 	}
 }
+
+func TestMsgUpdateDelete_DryRun(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"update", []string{"update", "--channel", "C1", "--ts", "1.0", "--text", "new"}, "chat.update"},
+		{"delete", []string{"delete", "--channel", "C1", "--ts", "1.0"}, "chat.delete"},
+		{"react", []string{"react", "--channel", "C1", "--ts", "1.0", "--emoji", "thumbsup"}, "reactions.add"},
+		{"schedule", []string{"schedule", "--channel", "C1", "--text", "later", "--at", "1799999999"}, "chat.scheduleMessage"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &GlobalFlags{DryRun: true}
+			cmd := newMsgCommand(g)
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetArgs(tc.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute: %v", err)
+			}
+			if !strings.Contains(out.String(), tc.want) {
+				t.Fatalf("want %q in %q", tc.want, out.String())
+			}
+		})
+	}
+}
