@@ -25,7 +25,7 @@ type Resolver struct {
 func New(cachePath string, lookup Lookup) *Resolver {
 	r := &Resolver{path: cachePath, lookup: lookup, cache: map[string]string{}}
 	if data, err := os.ReadFile(cachePath); err == nil {
-		json.Unmarshal(data, &r.cache)
+		_ = json.Unmarshal(data, &r.cache)
 	}
 	return r
 }
@@ -46,6 +46,8 @@ func (r *Resolver) Resolve(id string) string {
 	return name
 }
 
+// flush persists the in-memory cache to disk; errors are silently ignored
+// because the cache is an optional best-effort optimization.
 func (r *Resolver) flush() {
 	if err := os.MkdirAll(filepath.Dir(r.path), 0o700); err != nil {
 		return
@@ -54,5 +56,5 @@ func (r *Resolver) flush() {
 	if err != nil {
 		return
 	}
-	os.WriteFile(r.path, data, 0o600)
+	_ = os.WriteFile(r.path, data, 0o600)
 }
