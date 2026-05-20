@@ -61,6 +61,10 @@ func newCanvasCreateCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
 			var resp struct {
 				CanvasID string `json:"canvas_id"`
 			}
@@ -210,8 +214,13 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("canvases.edit", params, nil); err != nil {
+			raw, err := client.Call("canvases.edit", params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "canvas updated")
 			return nil
