@@ -15,7 +15,7 @@ func newThreadCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
-	var channel, ts, oldest, latest, cursor string
+	var channel, thread, oldest, latest, cursor string
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "read",
@@ -27,7 +27,7 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 			}
 			params := map[string]string{
 				"channel": channel,
-				"ts":      ts,
+				"ts":      thread,
 				"limit":   fmt.Sprintf("%d", limit),
 			}
 			if oldest != "" {
@@ -48,11 +48,7 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 				return nil
 			}
 			var resp struct {
-				Messages []struct {
-					User string `json:"user"`
-					Text string `json:"text"`
-					TS   string `json:"ts"`
-				} `json:"messages"`
+				Messages []slackMessage `json:"messages"`
 			}
 			if err := json.Unmarshal(raw, &resp); err != nil {
 				return err
@@ -60,19 +56,19 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 			r := newResolver(g, client)
 			items := make([]msgItem, len(resp.Messages))
 			for i, m := range resp.Messages {
-				items[i] = msgItem{User: resolveUser(r, m.User), Text: m.Text, TS: m.TS}
+				items[i] = msgItem{User: messageDisplay(r, m), Text: m.Text, TS: m.TS}
 			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, items)
 		},
 	}
 	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
-	cmd.Flags().StringVar(&ts, "ts", "", "parent message ts")
+	cmd.Flags().StringVar(&thread, "thread", "", "parent message ts")
 	cmd.Flags().IntVar(&limit, "limit", 100, "max replies")
 	cmd.Flags().StringVar(&oldest, "oldest", "", "start of time range (ts)")
 	cmd.Flags().StringVar(&latest, "latest", "", "end of time range (ts)")
 	cmd.Flags().StringVar(&cursor, "cursor", "", "pagination cursor")
 	cmd.MarkFlagRequired("channel")
-	cmd.MarkFlagRequired("ts")
+	cmd.MarkFlagRequired("thread")
 	return cmd
 }
 
@@ -95,8 +91,13 @@ func newThreadReplyCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("chat.postMessage", params, nil); err != nil {
+			raw, err := client.Call("chat.postMessage", params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "replied")
 			return nil

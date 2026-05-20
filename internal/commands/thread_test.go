@@ -13,10 +13,13 @@ func TestThreadRead_FlagsRegistered(t *testing.T) {
 	if err != nil {
 		t.Fatalf("find read: %v", err)
 	}
-	for _, name := range []string{"oldest", "latest", "cursor", "limit", "channel", "ts"} {
+	for _, name := range []string{"oldest", "latest", "cursor", "limit", "channel", "thread"} {
 		if read.Flags().Lookup(name) == nil {
 			t.Errorf("missing flag --%s on thread read", name)
 		}
+	}
+	if read.Flags().Lookup("ts") != nil {
+		t.Error("--ts must be removed; both thread verbs use --thread (no alias)")
 	}
 }
 
