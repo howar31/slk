@@ -127,7 +127,10 @@ func fetchUsersWith(client *api.Client, opts userListOpts) ([]searchHit, error) 
 			return hits, err
 		}
 		for _, m := range resp.Members {
-			if m.IsBot && !opts.IncludeBots {
+			// Slackbot is flagged is_bot=false by the API but is functionally a
+			// system bot — treat it as one for filtering purposes.
+			isBot := m.IsBot || m.ID == "USLACKBOT"
+			if isBot && !opts.IncludeBots {
 				continue
 			}
 			if m.Deleted && !opts.IncludeDeactivated {

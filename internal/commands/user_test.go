@@ -32,6 +32,7 @@ func TestFetchUsersWith_DefaultFilterAndPagination(t *testing.T) {
 				{"id": "U2", "name": "bot1", "real_name": "Bot 1", "is_bot": true},
 				{"id": "U3", "name": "ghost", "real_name": "Ghost", "deleted": true},
 				{"id": "U4", "name": "bob", "real_name": "Bob"},
+				{"id": "USLACKBOT", "name": "slackbot", "real_name": "Slackbot"},
 			},
 			"response_metadata": map[string]any{"next_cursor": ""},
 		})
@@ -44,12 +45,12 @@ func TestFetchUsersWith_DefaultFilterAndPagination(t *testing.T) {
 	if err != nil {
 		t.Fatalf("default filter: %v", err)
 	}
-	// Default: drop bots + deactivated. Expect U1 and U4 only.
+	// Default: drop bots + deactivated + Slackbot. Expect U1 and U4 only.
 	if len(hits) != 2 {
 		t.Fatalf("default filter should yield 2 hits, got %d (%+v)", len(hits), hits)
 	}
 	for _, h := range hits {
-		if h.ID == "U2" || h.ID == "U3" {
+		if h.ID == "U2" || h.ID == "U3" || h.ID == "USLACKBOT" {
 			t.Errorf("filter let through forbidden ID %s", h.ID)
 		}
 	}
@@ -58,8 +59,8 @@ func TestFetchUsersWith_DefaultFilterAndPagination(t *testing.T) {
 	if err != nil {
 		t.Fatalf("include-all: %v", err)
 	}
-	if len(allHits) != 4 {
-		t.Errorf("include-all should yield 4 hits, got %d", len(allHits))
+	if len(allHits) != 5 {
+		t.Errorf("include-all should yield 5 hits, got %d", len(allHits))
 	}
 
 	capped, err := fetchUsersWith(c, userListOpts{Limit: 1})
