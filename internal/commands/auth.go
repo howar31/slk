@@ -197,7 +197,7 @@ func newAuthLoginCommand() *cobra.Command {
 	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace label")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "your Slack app client ID")
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "your Slack app client secret")
-	cmd.Flags().StringVar(&scopes, "scopes", "channels:history,channels:read,chat:write,users:read", "comma-separated user scopes")
+	cmd.Flags().StringVar(&scopes, "scopes", "channels:history,channels:read,channels:write,groups:history,groups:read,groups:write,im:history,im:read,im:write,mpim:history,mpim:read,mpim:write,chat:write,reactions:write,search:read,users:read,users.profile:read,files:read,canvases:read,canvases:write,lists:read,lists:write", "comma-separated user scopes")
 	cmd.Flags().StringVar(&port, "port", "3000", "local callback port")
 	cmd.MarkFlagRequired("client-id")
 	cmd.MarkFlagRequired("client-secret")

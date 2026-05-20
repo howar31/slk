@@ -3,7 +3,7 @@
 > Agent-facing Slack CLI — token-efficient read, send, and manage for AI agents.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Go Reference](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://go.dev/)
+[![Go Reference](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev/)
 
 `slk` is a single static Go binary for the Slack Web API, designed for AI agents and the
 humans they collaborate with. Compared to the official Slack MCP connector — which returns
@@ -33,7 +33,7 @@ exposes `--raw` when a caller wants full API responses.
 
 ## Prerequisites
 
-- Go 1.22+ (only required if you install from source).
+- Go 1.25+ (only required if you install from source).
 - A Slack workspace where you can create your own Slack app. `slk` uses your own OAuth
   credentials; it never embeds a client secret in the binary.
 - A Slack user OAuth token (`xoxp-…`) with the scopes for the commands you plan to use. See
@@ -188,6 +188,7 @@ command. Either reference `slk --help` from your agent's instructions, or paste 
 ```bash
 slk msg read    --channel C0123456789 --limit 20
 slk msg send    --channel C0123456789 --text "hello"
+slk msg send    --channel C0123456789 --thread 1700000000.000000 --text "in-thread"
 slk thread reply --channel C0123456789 --thread 1700000000.000000 --text "…"
 slk search channels
 slk canvas create --title "Plan" --markdown "# Heading"
