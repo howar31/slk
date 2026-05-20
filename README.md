@@ -66,6 +66,82 @@ is not available to OAuth user tokens. To list, edit, or delete drafts,
 use the Slack desktop or web client's "Drafts & Sent" panel. The URL
 emitted by `msg draft` opens the channel where the draft lives.
 
+## Known Slack-side limitations
+
+These behaviors come from Slack's API itself, not from `slk`. Documented
+here so they don't surprise you.
+
+- **Scheduled messages within ~5 minutes of `post_at` may still fire after
+  `chat.deleteScheduledMessage` returns `ok=true`.** Slack appears to
+  lock the message into the delivery queue some minutes before firing;
+  the cancel succeeds in the API but the message still posts. Empirically
+  T+180s is unreliable, T+600s is reliable. For cancellable schedules,
+  pick a `--at` at least 5–10 minutes in the future.
+- **`msg delete` on a self-DM returns `chat.delete: internal_error`.**
+  Slack restricts API deletion in 1:1 DMs. Use the Slack desktop / web
+  UI to delete a DM message.
+- **Slack Lists have no public delete API.** `slackLists.delete` returns
+  `unknown_method`, and `files.delete` requires the `files:write` scope
+  which isn't in slk's default set. To delete a list, use the Slack UI.
+- **`channel invite` cannot invite a channel's creator or any existing
+  member.** Slack returns `cant_invite_self` / `already_in_channel`.
+  `slk` surfaces the error verbatim; expected behavior.
+- **`slk api` requires nested object params to be JSON-encoded strings.**
+  Slack's Web API uses form-urlencoded transport, so objects inside
+  `--params` must be pre-serialized:
+
+  ```bash
+  # WRONG — criteria is a nested object
+  slk api canvases.sections.lookup \
+    --params '{"canvas_id":"F0...","criteria":{"section_types":["any_header"]}}'
+
+  # RIGHT — criteria is a JSON-encoded string
+  slk api canvases.sections.lookup \
+    --params '{"canvas_id":"F0...","criteria":"{\"section_types\":[\"any_header\"]}"}'
+  ```
+
+### Slack Lists item shape
+
+Slack's Lists API uses rich_text blocks even for plain-text columns. To
+add or update an item you must build the cell payload exactly:
+
+```bash
+# Find the column ID once
+slk api slackLists.create --params '{"name":"my list"}'
+# -> { "list_id": "F0...", "list_metadata": { "schema": [ { "id": "Col0...", ... } ] } }
+
+# Add an item (initial_fields shape)
+slk list add-item --id F0... --fields '[
+  {
+    "column_id": "Col0...",
+    "rich_text": [{
+      "type": "rich_text",
+      "elements": [{
+        "type": "rich_text_section",
+        "elements": [{"type": "text", "text": "hello"}]
+      }]
+    }]
+  }
+]'
+
+# Update a cell — slk fills row_id into any cell that omits it.
+slk list update-item --id F0... --row-id Rec0... --fields '[
+  {
+    "column_id": "Col0...",
+    "rich_text": [{
+      "type": "rich_text",
+      "elements": [{
+        "type": "rich_text_section",
+        "elements": [{"type": "text", "text": "updated"}]
+      }]
+    }]
+  }
+]'
+
+# To update cells across multiple rows in one call, put row_id inside each
+# cell instead; --row-id then becomes the fallback for cells that omit it.
+```
+
 ## MCP vs CLI: token cost
 
 **CLI 明顯比較友善**，主要差距在四個面向：
