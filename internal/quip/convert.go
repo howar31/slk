@@ -419,7 +419,7 @@ func (c *converter) emitCodeBlock(n *html.Node) {
 
 // emitTable renders a <table> as a Markdown pipe table.
 func (c *converter) emitTable(n *html.Node, ls *listState) {
-	rows := collectRows(n)
+	rows := c.collectRows(n)
 	if len(rows) == 0 {
 		return
 	}
@@ -454,8 +454,9 @@ func (c *converter) emitTable(n *html.Node, ls *listState) {
 	}
 }
 
-// collectRows extracts all rows (as string slices) from a table node.
-func collectRows(n *html.Node) [][]string {
+// collectRows extracts all rows (as string slices) from a table node,
+// recording any temp:C: section IDs encountered in cells into c.sections.
+func (c *converter) collectRows(n *html.Node) [][]string {
 	var rows [][]string
 	var traverse func(*html.Node)
 	traverse = func(node *html.Node) {
@@ -463,7 +464,7 @@ func collectRows(n *html.Node) [][]string {
 			var cells []string
 			for ch := node.FirstChild; ch != nil; ch = ch.NextSibling {
 				if ch.Type == html.ElementNode && (ch.Data == "td" || ch.Data == "th") {
-					cells = append(cells, collectCellText(ch))
+					cells = append(cells, c.collectCellText(ch))
 				}
 			}
 			if len(cells) > 0 {
@@ -479,8 +480,9 @@ func collectRows(n *html.Node) [][]string {
 	return rows
 }
 
-// collectCellText extracts plain text from a table cell (strips HTML tags, handles <p>).
-func collectCellText(n *html.Node) string {
+// collectCellText extracts plain text from a table cell (strips HTML tags, handles <p>),
+// and records any temp:C: section IDs found on descendant elements into c.sections.
+func (c *converter) collectCellText(n *html.Node) string {
 	var sb strings.Builder
 	var traverse func(*html.Node)
 	traverse = func(node *html.Node) {
@@ -496,8 +498,25 @@ func collectCellText(n *html.Node) string {
 			traverse(ch)
 		}
 	}
+	// Collect the cell's plain text first.
 	traverse(n)
-	return strings.TrimSpace(sb.String())
+	cellText := strings.TrimSpace(sb.String())
+
+	// Walk descendants and record every temp:C: id against the cell text.
+	var recordIDs func(*html.Node)
+	recordIDs = func(node *html.Node) {
+		if node.Type == html.ElementNode {
+			if id := attr(node, "id"); strings.HasPrefix(id, "temp:C:") {
+				c.sections[id] = cellText
+			}
+		}
+		for ch := node.FirstChild; ch != nil; ch = ch.NextSibling {
+			recordIDs(ch)
+		}
+	}
+	recordIDs(n)
+
+	return cellText
 }
 
 // collectText extracts all text content from a subtree (no markup).

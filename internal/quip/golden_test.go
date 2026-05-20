@@ -25,27 +25,18 @@ func TestConvert_FullFixture_Golden(t *testing.T) {
 		t.Errorf("converted output diverged from golden.\n--- want ---\n%s\n--- got ---\n%s", string(want), got)
 	}
 
-	// Sanity: section IDs for top-level elements (headers, paragraphs, list items)
-	// must all appear in the sections map. IDs nested inside <table> cells are
-	// intentionally omitted by the converter (collectCellText bypasses capture).
-	// We check the double-quoted-attribute form only; single-quoted attrs (on <ul>
-	// and <li> wrapper elements) may or may not be present depending on depth.
+	// Sanity: every temp:C: section ID found in the fixture HTML (double-quoted
+	// attribute form) must appear in the sections map returned by Convert.
+	// Single-quoted attrs (on <ul> and <li> wrapper elements) are skipped because
+	// they use a different quoting style and are handled separately.
 	inStr := string(in)
-	tableStart := strings.Index(inStr, "<table>")
-	tableEnd := strings.Index(inStr, "</table>") + len("</table>")
 	parts := strings.Split(inStr, `id="temp:C:`)
-	for i, line := range parts[1:] {
+	for _, line := range parts[1:] {
 		end := strings.Index(line, `"`)
 		if end <= 0 {
 			continue
 		}
 		id := "temp:C:" + line[:end]
-		// Locate this id's byte offset in the original input to skip table-nested ids.
-		offset := strings.Index(inStr, `id="temp:C:`+line[:end]+`"`)
-		if tableStart >= 0 && tableEnd > tableStart && offset >= tableStart && offset < tableEnd {
-			continue // table-cell <p> ids are not captured by the converter
-		}
-		_ = i
 		if _, ok := sections[id]; !ok {
 			t.Errorf("missing section mapping for %s", id)
 		}
