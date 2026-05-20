@@ -89,3 +89,14 @@ func TestCanvasUpdate_DryRun(t *testing.T) {
 		t.Fatalf("dry-run output = %q", out.String())
 	}
 }
+
+func TestCanvasRead_WithSectionsFlag(t *testing.T) {
+	cmd := newCanvasCommand(&GlobalFlags{})
+	read, _, err := cmd.Find([]string{"read"})
+	if err != nil {
+		t.Fatalf("find read: %v", err)
+	}
+	if read.Flags().Lookup("with-sections") == nil {
+		t.Fatal("missing --with-sections")
+	}
+}

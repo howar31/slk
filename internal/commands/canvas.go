@@ -3,8 +3,11 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/howar31/slk/internal/output"
+	"github.com/howar31/slk/internal/quip"
 	"github.com/spf13/cobra"
 )
 
@@ -71,24 +74,77 @@ func newCanvasCreateCommand(g *GlobalFlags) *cobra.Command {
 
 func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 	var canvasID string
+	var withSections bool
 	cmd := &cobra.Command{
 		Use:   "read",
-		Short: "Read a canvas as raw API output",
+		Short: "Read a canvas as markdown (HTML-converted)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(g)
 			if err != nil {
 				return err
 			}
-			raw, err := client.Call("canvases.sections.lookup",
-				map[string]string{"canvas_id": canvasID}, nil)
+			// 1. files.info → get url_private_download
+			raw, err := client.Call("files.info", map[string]string{"file": canvasID}, nil)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+			var info struct {
+				File struct {
+					URLPrivateDownload string `json:"url_private_download"`
+					URLPrivate         string `json:"url_private"`
+				} `json:"file"`
+			}
+			if err := json.Unmarshal(raw, &info); err != nil {
+				return err
+			}
+			downloadURL := info.File.URLPrivateDownload
+			if downloadURL == "" {
+				downloadURL = info.File.URLPrivate
+			}
+			if downloadURL == "" {
+				return fmt.Errorf("canvas read: no download URL on file %s", canvasID)
+			}
+
+			// 2. Authenticated GET → HTML
+			req, _ := http.NewRequest("GET", downloadURL, nil)
+			req.Header.Set("Authorization", "Bearer "+client.Token)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return err
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+			if resp.StatusCode != 200 {
+				return fmt.Errorf("canvas read: download returned %d", resp.StatusCode)
+			}
+
+			// 3. Output
+			if g.Raw {
+				fmt.Fprint(cmd.OutOrStdout(), string(body))
+				return nil
+			}
+			md, sections, err := quip.Convert(string(body))
+			if err != nil {
+				return err
+			}
+			if withSections {
+				out := struct {
+					Markdown string            `json:"markdown"`
+					Sections map[string]string `json:"sections"`
+				}{md, sections}
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+				return enc.Encode(out)
+			}
+			fmt.Fprint(cmd.OutOrStdout(), md)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&canvasID, "id", "", "canvas ID")
+	cmd.Flags().BoolVar(&withSections, "with-sections", false, "also emit the section_id mapping (JSON output)")
 	cmd.MarkFlagRequired("id")
 	return cmd
 }
