@@ -6,6 +6,27 @@ import (
 	"testing"
 )
 
+func TestCanvasHit_Concise(t *testing.T) {
+	c := canvasHit{ID: "F1", Title: "My Canvas", Permalink: "https://x/y/F1"}
+	got := c.Concise()
+	if !strings.Contains(got, "My Canvas") || !strings.Contains(got, "F1") || !strings.Contains(got, "https://x/y/F1") {
+		t.Fatalf("concise = %q", got)
+	}
+}
+
+func TestCanvasCommand_HasListSubcommand(t *testing.T) {
+	cmd := newCanvasCommand(&GlobalFlags{})
+	want := map[string]bool{"create": false, "read": false, "update": false, "list": false}
+	for _, sub := range cmd.Commands() {
+		want[sub.Name()] = true
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("missing canvas subcommand %q", name)
+		}
+	}
+}
+
 func TestCanvasUpdate_ActionDryRun(t *testing.T) {
 	for _, tc := range []struct {
 		args []string

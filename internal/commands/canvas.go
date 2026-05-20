@@ -4,12 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/howar31/slk/internal/output"
 	"github.com/spf13/cobra"
 )
 
+// canvasHit is a trimmed result from search.files filtered to canvases.
+type canvasHit struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Permalink string `json:"permalink"`
+}
+
+func (c canvasHit) Concise() string {
+	return fmt.Sprintf("%s (%s) %s", c.Title, c.ID, c.Permalink)
+}
+
 func newCanvasCommand(g *GlobalFlags) *cobra.Command {
-	cmd := &cobra.Command{Use: "canvas", Short: "Create, read, update canvases"}
-	cmd.AddCommand(newCanvasCreateCommand(g), newCanvasReadCommand(g), newCanvasUpdateCommand(g))
+	cmd := &cobra.Command{Use: "canvas", Short: "Create, read, update, list canvases"}
+	cmd.AddCommand(newCanvasCreateCommand(g), newCanvasReadCommand(g), newCanvasUpdateCommand(g), newCanvasListCommand(g))
 	return cmd
 }
 
@@ -146,5 +158,56 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&sectionID, "section-id", "", "optional section ID to target")
 	cmd.MarkFlagRequired("id")
 	cmd.MarkFlagRequired("markdown")
+	return cmd
+}
+
+func newCanvasListCommand(g *GlobalFlags) *cobra.Command {
+	var userQuery string
+	var limit int
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List canvases via search.files",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			q := "type:canvases"
+			if userQuery != "" {
+				q = userQuery + " type:canvases"
+			}
+			raw, err := client.Call("search.files", map[string]string{
+				"query": q,
+				"count": fmt.Sprintf("%d", limit),
+			}, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			var resp struct {
+				Files struct {
+					Matches []struct {
+						ID        string `json:"id"`
+						Title     string `json:"title"`
+						Permalink string `json:"permalink"`
+						User      string `json:"user"`
+					} `json:"matches"`
+				} `json:"files"`
+			}
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				return err
+			}
+			hits := make([]canvasHit, len(resp.Files.Matches))
+			for i, m := range resp.Files.Matches {
+				hits[i] = canvasHit{ID: m.ID, Title: m.Title, Permalink: m.Permalink}
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
+		},
+	}
+	cmd.Flags().StringVar(&userQuery, "query", "", "extra search terms prepended to type:canvases")
+	cmd.Flags().IntVar(&limit, "limit", 20, "max results (1-100)")
 	return cmd
 }
