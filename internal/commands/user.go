@@ -42,47 +42,105 @@ func newUserCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newUserListCommand(g *GlobalFlags) *cobra.Command {
+	var limit int
+	var cursor string
+	var includeBots, includeDeactivated bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List workspace users",
+		Long: `List workspace users.
+
+By default the output excludes bot users and deactivated accounts, which are
+usually noise for agent workflows. Pass --include-bots / --include-deactivated
+to bring them back. --raw is not offered here: a multi-page response has no
+single raw envelope.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(g)
 			if err != nil {
 				return err
 			}
-			hits, err := fetchUsers(client)
+			hits, err := fetchUsersWith(client, userListOpts{
+				Cursor:             cursor,
+				Limit:              limit,
+				IncludeBots:        includeBots,
+				IncludeDeactivated: includeDeactivated,
+			})
 			if err != nil {
 				return err
 			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
 		},
 	}
+	cmd.Flags().IntVar(&limit, "limit", 0, "max users to return (0 = no client-side cap)")
+	cmd.Flags().StringVar(&cursor, "cursor", "", "initial pagination cursor")
+	cmd.Flags().BoolVar(&includeBots, "include-bots", false, "include bot users (default false)")
+	cmd.Flags().BoolVar(&includeDeactivated, "include-deactivated", false, "include deactivated users (default false)")
 	return cmd
 }
 
-// fetchUsers pages through users.list and returns trimmed user hits.
-// NOTE: users.list returns ALL members including bots and deactivated
-// accounts; slk does not filter them, so callers see the full membership.
+// userListOpts captures the user-facing knobs of newUserListCommand.
+type userListOpts struct {
+	Cursor             string
+	Limit              int
+	IncludeBots        bool
+	IncludeDeactivated bool
+}
+
+// fetchUsers pages through users.list and returns trimmed user hits. Kept
+// unfiltered for `search users`, which performs its own client-side narrowing
+// via --query and should not silently drop bots / deactivated accounts.
 func fetchUsers(client *api.Client) ([]searchHit, error) {
-	pages, err := client.CallAll("users.list", map[string]string{"limit": "200"}, 10)
-	if err != nil {
-		return nil, err
-	}
+	return fetchUsersWith(client, userListOpts{IncludeBots: true, IncludeDeactivated: true})
+}
+
+// fetchUsersWith pages through users.list honoring caller-supplied
+// pagination + filter knobs. Pagination stops once Limit results have
+// accumulated so a tight --limit does not pay for unused pages.
+func fetchUsersWith(client *api.Client, opts userListOpts) ([]searchHit, error) {
+	params := map[string]string{"limit": "200"}
+	cursor := opts.Cursor
 	var hits []searchHit
-	for _, raw := range pages {
+	const maxPages = 10
+	for page := 0; page < maxPages; page++ {
+		if cursor != "" {
+			params["cursor"] = cursor
+		} else {
+			delete(params, "cursor")
+		}
+		raw, err := client.Call("users.list", params, nil)
+		if err != nil {
+			return hits, err
+		}
 		var resp struct {
 			Members []struct {
 				ID       string `json:"id"`
 				Name     string `json:"name"`
 				RealName string `json:"real_name"`
+				IsBot    bool   `json:"is_bot"`
+				Deleted  bool   `json:"deleted"`
 			} `json:"members"`
+			ResponseMetadata struct {
+				NextCursor string `json:"next_cursor"`
+			} `json:"response_metadata"`
 		}
 		if err := json.Unmarshal(raw, &resp); err != nil {
-			return nil, err
+			return hits, err
 		}
 		for _, m := range resp.Members {
+			if m.IsBot && !opts.IncludeBots {
+				continue
+			}
+			if m.Deleted && !opts.IncludeDeactivated {
+				continue
+			}
 			hits = append(hits, searchHit{Name: m.Name, ID: m.ID, Extra: m.RealName})
+			if opts.Limit > 0 && len(hits) >= opts.Limit {
+				return hits, nil
+			}
+		}
+		cursor = resp.ResponseMetadata.NextCursor
+		if cursor == "" {
+			break
 		}
 	}
 	return hits, nil
