@@ -153,9 +153,10 @@ are exposed as small functions (`parseListCreateID`,
 in isolation against `httptest.NewServer`-backed `api.Client` instances.
 
 End-to-end coverage against a live Slack workspace is run manually
-when changes touch write paths; the most recent matrix and findings
-live in the conversation history that produced
-`/tmp/slk-e2e-report.html`.
+when changes touch write paths. The matrix and findings are recorded
+in the session transcript or handoff document that performed the run,
+not committed to the repo (the live workspace identifiers belong
+outside the public tree).
 
 ## Deploy
 

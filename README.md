@@ -1,119 +1,248 @@
 # slk
 
-Agent-facing Slack CLI. Read and send Slack messages, manage canvases, lists,
-and channels — with token-efficient output designed for AI agents.
+> Agent-facing Slack CLI — token-efficient read, send, and manage for AI agents.
 
-## Install
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Reference](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://go.dev/)
+
+`slk` is a single static Go binary for the Slack Web API, designed for AI agents and the
+humans they collaborate with. Compared to the official Slack MCP connector — which returns
+verbose, fixed-shape JSON envelopes — `slk` emits curated, low-token output by default and
+exposes `--raw` when a caller wants full API responses.
+
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Why slk?](#why-slk)
+- [Authentication](#authentication)
+- [AI agent skills](#ai-agent-skills)
+- [Usage](#usage)
+  - [Global flags](#global-flags)
+  - [Multi-line content](#multi-line-content)
+  - [Drafts](#drafts)
+  - [Slack Lists item shape](#slack-lists-item-shape)
+  - [Escape hatch — `slk api`](#escape-hatch--slk-api)
+- [Environment variables](#environment-variables)
+- [Exit codes](#exit-codes)
+- [Known Slack-side limitations](#known-slack-side-limitations)
+- [Development](#development)
+- [License](#license)
+- [Disclaimer](#disclaimer)
+
+## Prerequisites
+
+- Go 1.22+ (only required if you install from source).
+- A Slack workspace where you can create your own Slack app. `slk` uses your own OAuth
+  credentials; it never embeds a client secret in the binary.
+- A Slack user OAuth token (`xoxp-…`) with the scopes for the commands you plan to use. See
+  [Authentication](#authentication).
+
+## Installation
+
+### From source via `go install` (current primary path)
 
 ```bash
-brew install howar31/tap/slk
+go install github.com/howar31/slk/cmd/slk@latest
 ```
 
-Or download a binary from the Releases page.
+This places `slk` in `$GOBIN` (typically `$HOME/go/bin`). Make sure `$GOBIN` is on your
+`$PATH`.
 
-## Auth
+### Pre-built binaries
 
-`slk` uses your own Slack app. Create one at <https://api.slack.com/apps>, add
-user scopes, then either:
+Planned for the v0.1.0 release. Until then, build from source.
+
+### Homebrew
+
+Planned for the v0.1.0 release. Until the `howar31/homebrew-tap` repo is published, use the
+`go install` path above.
+
+## Quick start
+
+```bash
+# Confirm the install
+slk --version
+
+# Store your token (see Authentication for how to obtain one)
+slk auth set-token --profile work --workspace acme --user xoxp-...
+
+# Read the last 5 messages of a channel
+slk msg read --channel C0123456789 --limit 5
+
+# Send a message
+slk msg send --channel C0123456789 --text "hello"
+
+# Read a canvas as Markdown
+slk canvas read --id F0123456789
+```
+
+## Why slk?
+
+`slk` is built for agent workflows that talk to Slack frequently. Compared to the official
+Slack MCP connector, it is meaningfully cheaper per round-trip:
+
+| Operation | MCP response | `slk` default response |
+|---|---|---|
+| Send message | 200–400 tokens (full message object) | ~7 tokens (`sent <ts>`) |
+| Read 3 messages | 1000–2000 tokens (full metadata each) | ~150 tokens (concise JSON) |
+| Search users | 500+ tokens per user (profile + avatars + tz) | ~20 tokens per user (`name id extra`) |
+| Delete a message | Full envelope echo | ~2 tokens (`delete ok`) |
+
+Why the gap:
+
+1. **No persistent tool schema.** `slk` is invoked via `Bash`; the agent does not carry the
+   13 MCP tool schemas (~5–10 K tokens) in its context.
+2. **Curated by default.** Every read command renders a concise summary; `--format json` and
+   `--raw` are opt-in for full structure.
+3. **Default ID resolution.** `slk` maps `U…` / `C…` to human-readable names so the model
+   does not need a second round-trip to interpret IDs.
+4. **Shell composability.** Pipe through `jq`, `head`, `grep` to filter bytes before they
+   reach the model.
+5. **Opt-in detail.** `--raw` and `--format json` return the full envelope only when asked;
+   MCP returns it every call.
+
+When MCP is still the better choice:
+
+- The agent cannot execute a shell at all.
+- You need strict JSON-schema contracts for tool-calling integration.
+
+In typical agent workflows the savings compound: roughly **5–20× cheaper per call** and
+**2–5× cheaper across a full session**, depending on how much of the traffic is short
+confirmations and ID-resolved reads — the regime `slk` is designed to shine in.
+
+## Authentication
+
+`slk` walks the standard Slack OAuth flow using **your own** Slack app — slk does not embed a
+client secret.
+
+### 1. Create your Slack app
+
+Visit <https://api.slack.com/apps> → **Create New App** → **From scratch**. Pick a workspace.
+
+### 2. Add OAuth scopes
+
+Under **OAuth & Permissions** → **User Token Scopes**, add the scopes you need. The full set
+used by `slk`'s curated commands:
+
+```
+channels:history channels:read channels:write
+groups:history   groups:read   groups:write
+im:history       im:read       im:write
+mpim:history     mpim:read     mpim:write
+chat:write       reactions:write
+search:read
+users:read       users.profile:read
+files:read
+canvases:read    canvases:write
+lists:read       lists:write
+```
+
+You can paste an equivalent **App Manifest** into the same UI to add them in one shot.
+
+### 3. Install to your workspace, copy the token
+
+Click **Install to \<Workspace\>**. After approval, copy the **User OAuth Token** (begins with
+`xoxp-`). Some workspaces require an admin to approve the install.
+
+### 4. Store the token in `slk`
 
 ```bash
 # Paste a token directly
-slk auth set-token --profile work --workspace acme --user xoxp-... --bot xoxb-...
+slk auth set-token --profile work --workspace acme --user xoxp-...
 
-# Or run the OAuth flow
+# Or run the OAuth flow (requires your own client_id / client_secret)
 slk auth login --profile work --client-id ... --client-secret ...
 ```
+
+Tokens land in `~/.config/slk/config.toml` (mode `0600`). `slk` never prints token contents;
+`slk auth status` shows presence booleans only.
+
+### Precedence
+
+Active credential resolution, highest precedence first:
+
+1. `SLK_TOKEN` environment variable.
+2. `--profile <name>` command-line flag.
+3. `SLK_PROFILE` environment variable.
+4. The `active` profile in the config file.
+
+## AI agent skills
+
+`slk` ships a Claude Code skill at `skill/SKILL.md`. To install it:
+
+```bash
+mkdir -p ~/.claude/skills/slk
+cp ./skill/SKILL.md ~/.claude/skills/slk/SKILL.md
+```
+
+Claude Code will activate the skill automatically when relevant.
+
+For other AI agents (Cursor, Gemini CLI, GitHub Copilot, aider, …) `slk` is just a shell
+command. Either reference `slk --help` from your agent's instructions, or paste the
+`SKILL.md` content into the agent's persistent rules file (`.cursorrules`, `GEMINI.md`, etc.).
 
 ## Usage
 
 ```bash
-slk msg read --channel C0123456789 --limit 20
-slk msg send --channel C0123456789 --text "hello"
+slk msg read    --channel C0123456789 --limit 20
+slk msg send    --channel C0123456789 --text "hello"
+slk thread reply --channel C0123456789 --thread 1700000000.000000 --text "…"
 slk search channels
 slk canvas create --title "Plan" --markdown "# Heading"
-slk list create --title "Backlog"
-slk channel archive --channel C123
-slk api conversations.info --params '{"channel":"C123"}'
+slk canvas read   --id F0123456789
+slk list create   --title "Backlog"
+slk channel archive --channel C0123456789
+slk api conversations.info --params '{"channel":"C0123456789"}'
 ```
 
-Global flags: `--format concise|json|jsonl|table`, `--as user|bot`,
-`--profile`, `--raw`, `--dry-run`, `--no-resolve`.
+### Global flags
+
+| Flag | Description |
+|---|---|
+| `--format concise\|json\|jsonl\|table` | Output format (default `concise`). |
+| `--as user\|bot` | Identity selection when a profile has both tokens (default `user`). |
+| `--profile <name>` | Use a specific profile from the config file. |
+| `--raw` | Return the raw Slack API response, skipping concise rendering. |
+| `--dry-run` | Validate locally and print what would be sent; do not call the API. |
+| `--no-resolve` | Skip ID-to-name resolution (faster, less readable). |
 
 ### Multi-line content
 
-Bash double-quoted `"\n"` is a literal backslash-n, not a newline. To pass
-real multi-line content to `canvas create/update` or any `msg`/`thread`
-send, use the file or stdin alternative:
+Bash double-quoted `"\n"` is a literal backslash-n, not a newline. To pass real multi-line
+content, use the file or stdin alternative:
 
 ```bash
-# Read markdown from a file
 slk canvas create --title "Weekly" --markdown-file weekly.md
-
-# Read text from stdin (use "-" as the path)
-cat weekly.md | slk canvas update --id F0… --action prepend --markdown-file -
+cat weekly.md | slk canvas update --id F0123456789 --action prepend --markdown-file -
 ```
 
-`--markdown-file` is available on `canvas create` / `canvas update`;
-`--text-file` is available on `msg send` / `msg draft` / `msg schedule` /
-`msg update` / `thread reply`.
+`--markdown-file` is available on `canvas create` / `canvas update`. `--text-file` is
+available on `msg send` / `msg draft` / `msg schedule` / `msg update` / `thread reply`. Use
+`-` as the path to read from stdin.
 
 ### Drafts
 
-`msg draft` creates a draft via Slack's `drafts.create` endpoint, which
-accepts user tokens. The companion lifecycle endpoints (`drafts.list`,
-`drafts.delete`, `drafts.update`) require a Slack-client token type that
-is not available to OAuth user tokens. To list, edit, or delete drafts,
-use the Slack desktop or web client's "Drafts & Sent" panel. The URL
-emitted by `msg draft` opens the channel where the draft lives.
-
-## Known Slack-side limitations
-
-These behaviors come from Slack's API itself, not from `slk`. Documented
-here so they don't surprise you.
-
-- **Scheduled messages within ~5 minutes of `post_at` may still fire after
-  `chat.deleteScheduledMessage` returns `ok=true`.** Slack appears to
-  lock the message into the delivery queue some minutes before firing;
-  the cancel succeeds in the API but the message still posts. Empirically
-  T+180s is unreliable, T+600s is reliable. For cancellable schedules,
-  pick a `--at` at least 5–10 minutes in the future.
-- **`msg delete` on a self-DM returns `chat.delete: internal_error`.**
-  Slack restricts API deletion in 1:1 DMs. Use the Slack desktop / web
-  UI to delete a DM message.
-- **Slack Lists have no public delete API.** `slackLists.delete` returns
-  `unknown_method`, and `files.delete` requires the `files:write` scope
-  which isn't in slk's default set. To delete a list, use the Slack UI.
-- **`channel invite` cannot invite a channel's creator or any existing
-  member.** Slack returns `cant_invite_self` / `already_in_channel`.
-  `slk` surfaces the error verbatim; expected behavior.
-- **`slk api` requires nested object params to be JSON-encoded strings.**
-  Slack's Web API uses form-urlencoded transport, so objects inside
-  `--params` must be pre-serialized:
-
-  ```bash
-  # WRONG — criteria is a nested object
-  slk api canvases.sections.lookup \
-    --params '{"canvas_id":"F0...","criteria":{"section_types":["any_header"]}}'
-
-  # RIGHT — criteria is a JSON-encoded string
-  slk api canvases.sections.lookup \
-    --params '{"canvas_id":"F0...","criteria":"{\"section_types\":[\"any_header\"]}"}'
-  ```
+`msg draft` creates a draft via Slack's `drafts.create` endpoint. The companion lifecycle
+endpoints (`drafts.list` / `drafts.delete` / `drafts.update`) require Slack-client token types
+that are not available to OAuth user tokens; use the Slack desktop or web client's
+**Drafts & Sent** panel to list, edit, or delete drafts. The URL emitted by `msg draft` opens
+the channel where the draft lives.
 
 ### Slack Lists item shape
 
-Slack's Lists API uses rich_text blocks even for plain-text columns. To
-add or update an item you must build the cell payload exactly:
+Slack's Lists API uses rich-text blocks even for plain-text columns:
 
 ```bash
 # Find the column ID once
 slk api slackLists.create --params '{"name":"my list"}'
-# -> { "list_id": "F0...", "list_metadata": { "schema": [ { "id": "Col0...", ... } ] } }
+# → { "list_id": "F0…", "list_metadata": { "schema": [ { "id": "Col0…", … } ] } }
 
-# Add an item (initial_fields shape)
-slk list add-item --id F0... --fields '[
+# Add an item
+slk list add-item --id F0… --fields '[
   {
-    "column_id": "Col0...",
+    "column_id": "Col0…",
     "rich_text": [{
       "type": "rich_text",
       "elements": [{
@@ -124,10 +253,10 @@ slk list add-item --id F0... --fields '[
   }
 ]'
 
-# Update a cell — slk fills row_id into any cell that omits it.
-slk list update-item --id F0... --row-id Rec0... --fields '[
+# Update a cell — slk auto-fills row_id into any cell that omits it.
+slk list update-item --id F0… --row-id Rec0… --fields '[
   {
-    "column_id": "Col0...",
+    "column_id": "Col0…",
     "rich_text": [{
       "type": "rich_text",
       "elements": [{
@@ -137,45 +266,91 @@ slk list update-item --id F0... --row-id Rec0... --fields '[
     }]
   }
 ]'
-
-# To update cells across multiple rows in one call, put row_id inside each
-# cell instead; --row-id then becomes the fallback for cells that omit it.
 ```
 
-## MCP vs CLI: token cost
+To update cells across multiple rows in one call, put `row_id` inside each cell; `--row-id`
+becomes the fallback for cells that omit it.
 
-**CLI 明顯比較友善**，主要差距在四個面向：
+### Escape hatch — `slk api`
 
-### 1. Tool schema 常駐成本
-- **MCP**：13 個 Slack 工具的 JSONSchema 全部進 context（即使用 deferred ToolSearch，呼叫過的 schema 都會留下）。粗估 5–10K tokens。
-- **CLI**：對 LLM 來說只是 `Bash` 一個工具。`slk --help` 是純文字、且只有需要時才讀。
+`slk api <method>` invokes any Slack Web API method. Nested objects in `--params` must be
+pre-serialized JSON strings (Slack's Web API uses form-urlencoded transport):
 
-### 2. 回傳大小（這一輪最有感）
-本 session 的對比：
+```bash
+# WRONG — criteria is a nested object literal
+slk api canvases.sections.lookup \
+  --params '{"canvas_id":"F0…","criteria":{"section_types":["any_header"]}}'
 
-| 動作 | MCP 預期回傳 | slk 實際回傳 |
-|---|---|---|
-| send message | 整個 message object（channel/user/ts/blocks/team…），約 200–400 tokens | `sent 1779236987.634179` ≈ 7 tokens |
-| read 3 messages | 每筆完整 metadata，約 1–2K tokens | concise JSON 三筆 ≈ 150 tokens |
-| search users | 完整 user object（profile 含 avatar URLs、time_zone…）每筆 500+ tokens | `{name,id,extra}` 每筆 ≈ 20 tokens |
-| delete | `{"ok":true, ...}` 含完整 channel/ts echo | `delete ok` 2 tokens |
+# RIGHT — criteria is a JSON-encoded string
+slk api canvases.sections.lookup \
+  --params '{"canvas_id":"F0…","criteria":"{\"section_types\":[\"any_header\"]}"}'
+```
 
-slk 的 `--format concise` + 預設 `--no-resolve` 解析（ID→名稱）讓模型不需要再追問 user 名字，省第二次 round trip。
+## Environment variables
 
-### 3. 可預先過濾
-- **CLI**：可串 `jq`、`grep`、`head`，bytes 在進 context 前就被砍掉。
-- **MCP**：整包結果一定落地，模型才能讀。
+| Variable | Purpose |
+|---|---|
+| `SLK_TOKEN` | Token override. Highest precedence — bypasses the config file entirely. |
+| `SLK_PROFILE` | Active profile name. Used when `--profile` is not passed. |
+| `SLK_CONFIG` | Config file path override. Default: `~/.config/slk/config.toml`. |
 
-### 4. Opt-in 詳細模式
-slk 的 `--raw` 與 `--format json` 是「需要才開」；MCP 通常是「全送」。當你只是要確認某個動作成功，CLI 給 2–10 tokens 的確認句即可，MCP 給整包 JSON。
+## Exit codes
 
-### 例外（MCP 較佳的場景）
-- 需要 **嚴格 schema 驗證** 或下游程式直接消費結構化欄位時，MCP 的型別契約對 LLM tool-call 比較穩。
-- 純對話介面、模型不被允許執行 shell 時，MCP 是唯一選擇。
+| Code | Meaning |
+|---|---|
+| `0` | Success. |
+| `1` | Other error (network, JSON parse, miscellaneous). |
+| `2` | Reserved (Cobra usage errors currently still map to `1`; v1.2). |
+| `3` | Auth error (`invalid_auth`, `token_expired`, `not_authed`, missing profile). |
+| `4` | Not found (`channel_not_found`, `user_not_found`, `message_not_found`, …). |
+| `5` | Rate limited after the retry budget was exhausted. |
 
-### 結論
-日常使用，CLI 約可省下 **單次呼叫 5–20x、整段會話 2–5x** 的 token；MCP 的優勢主要在「沒有 shell 環境」或「需要結構化 schema 契約」。slk 已經把 `concise / --no-resolve / --raw` 三層粒度做好，本質上就是為了在 agent 場景把 token 開銷壓到最小，這個方向是對的。
+## Known Slack-side limitations
+
+These behaviors come from Slack itself, not from `slk`:
+
+- **Scheduled messages within ~5 minutes of `post_at` may still fire after
+  `chat.deleteScheduledMessage` returns `ok=true`.** Slack appears to lock the message into
+  its delivery queue before firing; the cancel succeeds in the API but the message still
+  posts. Empirically T+180 s is unreliable, T+600 s is reliable. For cancellable schedules,
+  pick `--at` at least 5–10 minutes in the future.
+- **`msg delete` on a self-DM returns `chat.delete: internal_error`.** Slack restricts API
+  deletion of 1:1 DMs; use the Slack desktop or web UI.
+- **Slack Lists have no public delete API.** `slackLists.delete` returns `unknown_method`,
+  and `files.delete` requires the `files:write` scope which is not in `slk`'s default set.
+  Delete lists in the Slack UI.
+- **`channel invite` cannot invite a channel's creator or any existing member.** Slack
+  returns `cant_invite_self` / `already_in_channel`. `slk` surfaces the error verbatim.
+- **`canvas read` cannot recover the original code-block language hint.** Slack's HTML
+  download route drops the triple-backtick language identifier. Text content is preserved;
+  the language tag is not.
+- **`drafts.list` / `drafts.delete` / `drafts.update` require a Slack-client token type
+  that is not available to OAuth user tokens.** Manage drafts in the Slack UI.
+
+## Development
+
+```bash
+# Build
+go build -ldflags "-X main.version=0.1.0" -o slk ./cmd/slk
+
+# Run the full test suite (uncached)
+go clean -testcache && go test ./...
+
+# Coverage snapshot
+go test ./... -coverpkg=./... -coverprofile=/tmp/slk.cov >/dev/null
+go tool cover -func=/tmp/slk.cov | tail -1
+
+# A single test
+go test ./internal/commands/ -run TestInjectRowID -v
+```
+
+Architecture, conventions, and design decisions live in [SPEC.md](SPEC.md).
 
 ## License
 
-MIT
+[MIT](LICENSE)
+
+## Disclaimer
+
+`slk` is not affiliated with or endorsed by Slack Technologies. "Slack" is a trademark of
+Slack Technologies, LLC.
