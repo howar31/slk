@@ -36,14 +36,18 @@ func canvasDocumentContent(markdown string) string {
 }
 
 func newCanvasCreateCommand(g *GlobalFlags) *cobra.Command {
-	var title, markdown string
+	var title, markdown, markdownFile string
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a standalone canvas",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			content, err := readContent(markdown, markdownFile, "--markdown", "--markdown-file")
+			if err != nil {
+				return err
+			}
 			params := map[string]string{
 				"title":            title,
-				"document_content": canvasDocumentContent(markdown),
+				"document_content": canvasDocumentContent(content),
 			}
 			if g.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] canvases.create title=%q\n", title)
@@ -67,8 +71,8 @@ func newCanvasCreateCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&title, "title", "", "canvas title")
 	cmd.Flags().StringVar(&markdown, "markdown", "", "canvas body in markdown")
+	cmd.Flags().StringVar(&markdownFile, "markdown-file", "", "path to markdown file (use - for stdin)")
 	cmd.MarkFlagRequired("title")
-	cmd.MarkFlagRequired("markdown")
 	return cmd
 }
 
@@ -150,11 +154,16 @@ func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
-	var canvasID, markdown, action, sectionID string
+	var canvasID, markdown, markdownFile, action, sectionID string
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update a canvas's content",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			content, err := readContent(markdown, markdownFile, "--markdown", "--markdown-file")
+			if err != nil {
+				return err
+			}
+
 			// Resolve operation from (action, sectionID).
 			var operation string
 			switch action {
@@ -188,7 +197,7 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 				"operation": operation,
 				"document_content": map[string]string{
 					"type":     "markdown",
-					"markdown": markdown,
+					"markdown": content,
 				},
 			}
 			if sectionID != "" {
@@ -210,10 +219,10 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&canvasID, "id", "", "canvas ID")
 	cmd.Flags().StringVar(&markdown, "markdown", "", "new canvas body in markdown")
+	cmd.Flags().StringVar(&markdownFile, "markdown-file", "", "path to markdown file (use - for stdin)")
 	cmd.Flags().StringVar(&action, "action", "replace", "edit action: replace (default), prepend, append")
 	cmd.Flags().StringVar(&sectionID, "section-id", "", "optional section ID to target")
 	cmd.MarkFlagRequired("id")
-	cmd.MarkFlagRequired("markdown")
 	return cmd
 }
 

@@ -77,12 +77,16 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newThreadReplyCommand(g *GlobalFlags) *cobra.Command {
-	var channel, thread, text string
+	var channel, thread, text, textFile string
 	cmd := &cobra.Command{
 		Use:   "reply",
 		Short: "Reply within a thread",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]string{"channel": channel, "thread_ts": thread, "text": text}
+			content, err := readContent(text, textFile, "--text", "--text-file")
+			if err != nil {
+				return err
+			}
+			params := map[string]string{"channel": channel, "thread_ts": thread, "text": content}
 			if g.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postMessage %v\n", params)
 				return nil
@@ -101,8 +105,8 @@ func newThreadReplyCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
 	cmd.Flags().StringVar(&thread, "thread", "", "parent message ts")
 	cmd.Flags().StringVar(&text, "text", "", "reply text")
+	cmd.Flags().StringVar(&textFile, "text-file", "", "path to text file (use - for stdin)")
 	cmd.MarkFlagRequired("channel")
 	cmd.MarkFlagRequired("thread")
-	cmd.MarkFlagRequired("text")
 	return cmd
 }

@@ -37,7 +37,7 @@ func newMsgCommand(g *GlobalFlags) *cobra.Command {
 	cmd.AddCommand(
 		newMsgReadCommand(g),
 		newMsgSendCommand(g),
-		newMsgWriteCommand(g, "update", "chat.update", []string{"channel", "ts", "text"}),
+		newMsgUpdateCommand(g),
 		newMsgWriteCommand(g, "delete", "chat.delete", []string{"channel", "ts"}),
 		newMsgReactCommand(g),
 		newMsgScheduleCommand(g),
@@ -112,13 +112,17 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
-	var channel, text, threadTS string
+	var channel, text, textFile, threadTS string
 	var replyBroadcast bool
 	cmd := &cobra.Command{
 		Use:   "send",
 		Short: "Send a message to a channel or DM",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]string{"channel": channel, "text": text}
+			content, err := readContent(text, textFile, "--text", "--text-file")
+			if err != nil {
+				return err
+			}
+			params := map[string]string{"channel": channel, "text": content}
 			if threadTS != "" {
 				params["thread_ts"] = threadTS
 			}
@@ -147,10 +151,10 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&channel, "channel", "", "channel ID or user ID")
 	cmd.Flags().StringVar(&text, "text", "", "message text")
+	cmd.Flags().StringVar(&textFile, "text-file", "", "path to text file (use - for stdin)")
 	cmd.Flags().StringVar(&threadTS, "thread", "", "reply in this thread ts")
 	cmd.Flags().BoolVar(&replyBroadcast, "reply-broadcast", false, "also broadcast a threaded reply to the channel (requires --thread)")
 	cmd.MarkFlagRequired("channel")
-	cmd.MarkFlagRequired("text")
 	return cmd
 }
 
@@ -187,6 +191,41 @@ func newMsgWriteCommand(g *GlobalFlags, use, method string, flags []string) *cob
 		cmd.Flags().StringVar(v, f, "", f+" value")
 		cmd.MarkFlagRequired(f)
 	}
+	return cmd
+}
+
+func newMsgUpdateCommand(g *GlobalFlags) *cobra.Command {
+	var channel, ts, text, textFile string
+	cmd := &cobra.Command{
+		Use:   "update",
+		Short: "update a message",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			content, err := readContent(text, textFile, "--text", "--text-file")
+			if err != nil {
+				return err
+			}
+			params := map[string]string{"channel": channel, "ts": ts, "text": content}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.update %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			if _, err := client.Call("chat.update", params, nil); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "update ok")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&ts, "ts", "", "message timestamp")
+	cmd.Flags().StringVar(&text, "text", "", "new message text")
+	cmd.Flags().StringVar(&textFile, "text-file", "", "path to text file (use - for stdin)")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("ts")
 	return cmd
 }
 
@@ -260,13 +299,17 @@ func textToBlocks(text string) string {
 }
 
 func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
-	var channel, text, at, thread string
+	var channel, text, textFile, at, thread string
 	var replyBroadcast bool
 	cmd := &cobra.Command{
 		Use:   "schedule",
 		Short: "Schedule a message for a future time",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]string{"channel": channel, "text": text, "post_at": at}
+			content, err := readContent(text, textFile, "--text", "--text-file")
+			if err != nil {
+				return err
+			}
+			params := map[string]string{"channel": channel, "text": content, "post_at": at}
 			if thread != "" {
 				params["thread_ts"] = thread
 			}
@@ -290,23 +333,27 @@ func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
 	cmd.Flags().StringVar(&text, "text", "", "message text")
+	cmd.Flags().StringVar(&textFile, "text-file", "", "path to text file (use - for stdin)")
 	cmd.Flags().StringVar(&at, "at", "", "Unix timestamp to post at")
 	cmd.Flags().StringVar(&thread, "thread", "", "optional thread parent ts")
 	cmd.Flags().BoolVar(&replyBroadcast, "reply-broadcast", false, "also broadcast a threaded reply to the channel (requires --thread)")
 	cmd.MarkFlagRequired("channel")
-	cmd.MarkFlagRequired("text")
 	cmd.MarkFlagRequired("at")
 	return cmd
 }
 
 func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {
-	var channel, text, thread string
+	var channel, text, textFile, thread string
 	cmd := &cobra.Command{
 		Use:   "draft",
 		Short: "Create a message draft via drafts.create",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			content, err := readContent(text, textFile, "--text", "--text-file")
+			if err != nil {
+				return err
+			}
 			if g.DryRun {
-				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] drafts.create channel_id=%s thread=%s text=%q\n", channel, thread, text)
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] drafts.create channel_id=%s thread=%s text=%q\n", channel, thread, content)
 				return nil
 			}
 
@@ -320,7 +367,7 @@ func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {
 				"channel_id":       channel,
 				"client_msg_id":    newUUID(),
 				"destinations":     string(destinationsBytes),
-				"blocks":           textToBlocks(text),
+				"blocks":           textToBlocks(content),
 				"file_ids":         "[]",
 				"is_from_composer": "true",
 			}
@@ -335,18 +382,25 @@ func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {
 			}
 			var resp struct {
 				Draft struct {
-					ID string `json:"id"`
+					ID     string `json:"id"`
+					TeamID string `json:"team_id"`
 				} `json:"draft"`
 			}
 			_ = json.Unmarshal(raw, &resp)
-			fmt.Fprintf(cmd.OutOrStdout(), "draft created %s\n", resp.Draft.ID)
+			if resp.Draft.TeamID != "" {
+				fmt.Fprintf(cmd.OutOrStdout(),
+					"draft created %s (manage in Slack: https://app.slack.com/client/%s/%s)\n",
+					resp.Draft.ID, resp.Draft.TeamID, channel)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "draft created %s\n", resp.Draft.ID)
+			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&channel, "channel", "", "destination channel or user ID")
 	cmd.Flags().StringVar(&text, "text", "", "draft message text")
+	cmd.Flags().StringVar(&textFile, "text-file", "", "path to text file (use - for stdin)")
 	cmd.Flags().StringVar(&thread, "thread", "", "optional thread_ts for a draft reply")
 	cmd.MarkFlagRequired("channel")
-	cmd.MarkFlagRequired("text")
 	return cmd
 }

@@ -2,6 +2,8 @@ package commands
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -130,5 +132,33 @@ func TestTextToBlocks_RoundTrip(t *testing.T) {
 	out := textToBlocks("hi")
 	if !strings.Contains(out, `"rich_text"`) || !strings.Contains(out, `"text":"hi"`) {
 		t.Fatalf("blocks JSON malformed: %s", out)
+	}
+}
+
+func TestMsgSend_TextFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "m.txt")
+	if err := os.WriteFile(p, []byte("from\nfile"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	g := &GlobalFlags{DryRun: true}
+	cmd := newMsgCommand(g)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"send", "--channel", "C1", "--text-file", p})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out.String(), "from\\nfile") && !strings.Contains(out.String(), "from\nfile") {
+		t.Fatalf("file content missing: %q", out.String())
+	}
+}
+
+func TestMsgSend_RequiresTextOrFile(t *testing.T) {
+	g := &GlobalFlags{DryRun: true}
+	cmd := newMsgCommand(g)
+	cmd.SetArgs([]string{"send", "--channel", "C1"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected error when neither --text nor --text-file given")
 	}
 }

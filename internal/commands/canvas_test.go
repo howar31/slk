@@ -2,6 +2,8 @@ package commands
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -87,6 +89,23 @@ func TestCanvasUpdate_DryRun(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "canvases.edit") {
 		t.Fatalf("dry-run output = %q", out.String())
+	}
+}
+
+func TestCanvasUpdate_MarkdownFile(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "c.md")
+	os.WriteFile(p, []byte("## H\nbody"), 0o600)
+	g := &GlobalFlags{DryRun: true}
+	cmd := newCanvasCommand(g)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"update", "--id", "F1", "--markdown-file", p, "--action", "prepend"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out.String(), "operation=insert_at_start") {
+		t.Fatalf("dry-run output: %q", out.String())
 	}
 }
 
