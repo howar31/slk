@@ -22,6 +22,8 @@ func newChannelCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newChannelListCommand(g *GlobalFlags) *cobra.Command {
+	var limit int
+	var cursor, types string
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List channels",
@@ -31,14 +33,32 @@ func newChannelListCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			hits, err := fetchChannels(client, false)
+			hits, err := fetchChannelsWith(client, channelListOpts{
+				Types:           types,
+				Cursor:          cursor,
+				Limit:           limit,
+				ExcludeArchived: false,
+			})
 			if err != nil {
 				return err
 			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
 		},
 	}
+	cmd.Flags().IntVar(&limit, "limit", 0, "max channels to return (0 = no client-side cap)")
+	cmd.Flags().StringVar(&cursor, "cursor", "", "initial pagination cursor")
+	cmd.Flags().StringVar(&types, "types", "public_channel,private_channel", "conversations.list types param")
 	return cmd
+}
+
+// channelListOpts captures the user-facing knobs of newChannelListCommand. It
+// stays internal so fetchChannels (used by search.channels) keeps its smaller
+// signature.
+type channelListOpts struct {
+	Types           string
+	Cursor          string
+	Limit           int
+	ExcludeArchived bool
 }
 
 func newChannelCreateCommand(g *GlobalFlags) *cobra.Command {
@@ -63,6 +83,10 @@ func newChannelCreateCommand(g *GlobalFlags) *cobra.Command {
 			raw, err := client.Call("conversations.create", params, nil)
 			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			var resp struct {
 				Channel struct {
@@ -95,8 +119,13 @@ func newChannelArchiveCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("conversations.archive", params, nil); err != nil {
+			raw, err := client.Call("conversations.archive", params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "archived")
 			return nil
@@ -122,8 +151,13 @@ func newChannelInviteCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("conversations.invite", params, nil); err != nil {
+			raw, err := client.Call("conversations.invite", params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "invited")
 			return nil
@@ -151,8 +185,13 @@ func newChannelTopicCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("conversations.setTopic", params, nil); err != nil {
+			raw, err := client.Call("conversations.setTopic", params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "topic set")
 			return nil
@@ -165,30 +204,54 @@ func newChannelTopicCommand(g *GlobalFlags) *cobra.Command {
 	return cmd
 }
 
-// fetchChannels pages through conversations.list and returns trimmed channel hits.
+// fetchChannels pages through conversations.list and returns trimmed channel
+// hits using slk's default knobs. Kept for callers (search.channels) that do
+// not surface pagination flags.
 func fetchChannels(client *api.Client, excludeArchived bool) ([]searchHit, error) {
+	return fetchChannelsWith(client, channelListOpts{ExcludeArchived: excludeArchived})
+}
+
+// fetchChannelsWith pages through conversations.list honoring caller-supplied
+// types / cursor / total-limit knobs. limit==0 means "no client-side cap".
+// Pagination stops as soon as `limit` results have accumulated so a tight
+// `--limit` does not pay for unused pages.
+func fetchChannelsWith(client *api.Client, opts channelListOpts) ([]searchHit, error) {
+	types := opts.Types
+	if types == "" {
+		types = "public_channel,private_channel"
+	}
 	params := map[string]string{
 		"limit": "200",
-		"types": "public_channel,private_channel",
+		"types": types,
 	}
-	if excludeArchived {
+	if opts.ExcludeArchived {
 		params["exclude_archived"] = "true"
 	}
-	pages, err := client.CallAll("conversations.list", params, 10)
-	if err != nil {
-		return nil, err
-	}
+	cursor := opts.Cursor
 	var hits []searchHit
-	for _, raw := range pages {
+	const maxPages = 10
+	for page := 0; page < maxPages; page++ {
+		if cursor != "" {
+			params["cursor"] = cursor
+		} else {
+			delete(params, "cursor")
+		}
+		raw, err := client.Call("conversations.list", params, nil)
+		if err != nil {
+			return hits, err
+		}
 		var resp struct {
 			Channels []struct {
 				ID         string `json:"id"`
 				Name       string `json:"name"`
 				NumMembers int    `json:"num_members"`
 			} `json:"channels"`
+			ResponseMetadata struct {
+				NextCursor string `json:"next_cursor"`
+			} `json:"response_metadata"`
 		}
 		if err := json.Unmarshal(raw, &resp); err != nil {
-			return nil, err
+			return hits, err
 		}
 		for _, c := range resp.Channels {
 			hits = append(hits, searchHit{
@@ -196,6 +259,13 @@ func fetchChannels(client *api.Client, excludeArchived bool) ([]searchHit, error
 				ID:    c.ID,
 				Extra: fmt.Sprintf("%d members", c.NumMembers),
 			})
+			if opts.Limit > 0 && len(hits) >= opts.Limit {
+				return hits, nil
+			}
+		}
+		cursor = resp.ResponseMetadata.NextCursor
+		if cursor == "" {
+			break
 		}
 	}
 	return hits, nil
