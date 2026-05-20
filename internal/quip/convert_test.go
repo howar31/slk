@@ -207,6 +207,27 @@ func TestConvert_BrNewline(t *testing.T) {
 	}
 }
 
+func TestConvert_NoLeadingBlankLine(t *testing.T) {
+	got, _, _ := Convert(`<h1 id="x">T</h1>`)
+	if strings.HasPrefix(got, "\n") {
+		t.Fatalf("output starts with newline: %q", got)
+	}
+	if !strings.HasPrefix(got, "# T") {
+		t.Fatalf("expected to start with '# T', got %q", got)
+	}
+}
+
+func TestConvert_BlockquoteSkipsEmptyParagraph(t *testing.T) {
+	in := `<p id="a"></p><blockquote><p id="b">quoted</p></blockquote>`
+	got, _, _ := Convert(in)
+	if strings.Contains(got, "> \n") || strings.Contains(got, "> \n>") {
+		t.Fatalf("empty blockquote line leaked: %q", got)
+	}
+	if !strings.Contains(got, "> quoted") {
+		t.Fatalf("missing real blockquote: %q", got)
+	}
+}
+
 // TestConvert_Integration tests a comprehensive canvas HTML with multiple element families.
 func TestConvert_Integration(t *testing.T) {
 	const fixture = `

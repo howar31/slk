@@ -18,7 +18,7 @@ func Convert(htmlStr string) (string, map[string]string, error) {
 	}
 	c := &converter{sections: map[string]string{}}
 	c.walk(doc, &listState{})
-	md := strings.TrimRight(c.out.String(), "\n") + "\n"
+	md := strings.TrimLeft(strings.TrimRight(c.out.String(), "\n"), "\n") + "\n"
 	return md, c.sections, nil
 }
 
@@ -112,9 +112,12 @@ func (c *converter) handleElement(n *html.Node, ls *listState) {
 		c.out.WriteString("`")
 
 	case "blockquote":
-		// Render children into a sub-builder, then prefix each line with "> ".
+		// Render children into a sub-builder, then prefix each non-empty line with "> ".
 		sub := c.sub(n, ls)
 		for _, line := range strings.Split(strings.TrimRight(sub, "\n"), "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
 			c.out.WriteString("\n> " + strings.TrimLeft(line, "\n"))
 		}
 		c.out.WriteString("\n")
@@ -249,6 +252,9 @@ func (c *converter) handleElementInner(n *html.Node, ls *listState) {
 	case "blockquote":
 		sub := c.sub(n, ls)
 		for _, line := range strings.Split(strings.TrimRight(sub, "\n"), "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
 			c.out.WriteString("\n> " + strings.TrimLeft(line, "\n"))
 		}
 		c.out.WriteString("\n")
