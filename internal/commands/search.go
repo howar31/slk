@@ -35,6 +35,7 @@ func newSearchCommand(g *GlobalFlags) *cobra.Command {
 
 func newSearchMessagesCommand(g *GlobalFlags) *cobra.Command {
 	var query string
+	var public bool
 	cmd := &cobra.Command{
 		Use:   "messages",
 		Short: "Search messages (requires a user token)",
@@ -43,7 +44,11 @@ func newSearchMessagesCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			raw, err := client.Call("search.messages", map[string]string{"query": query}, nil)
+			finalQuery := query
+			if public {
+				finalQuery = strings.TrimSpace(query + " in:public")
+			}
+			raw, err := client.Call("search.messages", map[string]string{"query": finalQuery}, nil)
 			if err != nil {
 				return err
 			}
@@ -71,6 +76,7 @@ func newSearchMessagesCommand(g *GlobalFlags) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&query, "query", "", "search query")
+	cmd.Flags().BoolVar(&public, "public", false, "restrict the search to public channels (appends in:public to the query)")
 	cmd.MarkFlagRequired("query")
 	return cmd
 }

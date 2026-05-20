@@ -26,6 +26,17 @@ func TestSearchUsers_QueryFlag(t *testing.T) {
 	}
 }
 
+func TestSearchMessages_PublicFlag(t *testing.T) {
+	cmd := newSearchCommand(&GlobalFlags{})
+	m, _, err := cmd.Find([]string{"messages"})
+	if err != nil {
+		t.Fatalf("find messages: %v", err)
+	}
+	if m.Flags().Lookup("public") == nil {
+		t.Fatal("missing --public on search messages")
+	}
+}
+
 func TestSearchHit_Concise(t *testing.T) {
 	h := searchHit{Name: "general", ID: "C1", Extra: "42 members"}
 	want := "general (C1) — 42 members"
