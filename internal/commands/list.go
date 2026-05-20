@@ -3,9 +3,58 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/howar31/slk/internal/output"
 	"github.com/spf13/cobra"
 )
+
+// listItem is one row trimmed from slackLists.items.list.
+type listItem struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+}
+
+// Concise renders "<row_id>  <primary text>". When the row has no text
+// fields (newly-created empty rows) only the row ID is shown.
+func (it listItem) Concise() string {
+	if it.Text == "" {
+		return it.ID
+	}
+	return fmt.Sprintf("%s  %s", it.ID, it.Text)
+}
+
+// parseListItems extracts row IDs and primary text from a slackLists.items.list
+// response. The primary text is the first non-empty `text` field of each row;
+// this is conventionally the list's primary column.
+func parseListItems(raw []byte) ([]listItem, error) {
+	var resp struct {
+		Items []struct {
+			ID     string `json:"id"`
+			Fields []struct {
+				Text string `json:"text"`
+			} `json:"fields"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	items := make([]listItem, 0, len(resp.Items))
+	for _, it := range resp.Items {
+		var text string
+		for _, f := range it.Fields {
+			if f.Text != "" {
+				text = f.Text
+				break
+			}
+		}
+		items = append(items, listItem{ID: it.ID, Text: text})
+	}
+	return items, nil
+}
+
+const listFieldsExample = `JSON array of cells. Each cell needs column_id plus a typed value (rich_text for text columns). Example:
+[{"column_id":"Col0…","rich_text":[{"type":"rich_text","elements":[{"type":"rich_text_section","elements":[{"type":"text","text":"hello"}]}]}]}]`
 
 func newListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{Use: "list", Short: "Create and manage Slack Lists"}
@@ -37,19 +86,27 @@ func newListCreateCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var resp struct {
-				List struct {
-					ID string `json:"id"`
-				} `json:"list"`
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
-			_ = json.Unmarshal(raw, &resp)
-			fmt.Fprintf(cmd.OutOrStdout(), "created list %s\n", resp.List.ID)
+			fmt.Fprintf(cmd.OutOrStdout(), "created list %s\n", parseListCreateID(raw))
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&title, "title", "", "list title")
 	cmd.MarkFlagRequired("title")
 	return cmd
+}
+
+// parseListCreateID extracts the new list ID from a slackLists.create response.
+// Slack returns the identifier at the top level as `list_id`.
+func parseListCreateID(raw []byte) string {
+	var resp struct {
+		ListID string `json:"list_id"`
+	}
+	_ = json.Unmarshal(raw, &resp)
+	return resp.ListID
 }
 
 func newListReadCommand(g *GlobalFlags) *cobra.Command {
@@ -67,8 +124,15 @@ func newListReadCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), string(raw))
-			return nil
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			items, err := parseListItems(raw)
+			if err != nil {
+				return err
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, items)
 		},
 	}
 	cmd.Flags().StringVar(&listID, "id", "", "list ID")
@@ -91,47 +155,98 @@ func newListAddItemCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("slackLists.items.create", params, nil); err != nil {
+			raw, err := client.Call("slackLists.items.create", params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "item added")
 			return nil
 		},
 	}
+	cmd.Long = "Add an item to a List.\n\n" + listFieldsExample
 	cmd.Flags().StringVar(&listID, "id", "", "list ID")
-	cmd.Flags().StringVar(&fieldsJSON, "fields", "[]", "initial fields as JSON array")
+	cmd.Flags().StringVar(&fieldsJSON, "fields", "[]", "initial fields as JSON array (see Long help for shape)")
 	cmd.MarkFlagRequired("id")
 	return cmd
 }
 
 func newListUpdateItemCommand(g *GlobalFlags) *cobra.Command {
-	var listID, itemID, fieldsJSON string
+	var listID, rowID, fieldsJSON string
 	cmd := &cobra.Command{
 		Use:   "update-item",
 		Short: "Update an item in a List",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]string{
-				"list_id": listID, "id": itemID, "cells": fieldsJSON,
+			cells, err := injectRowID(fieldsJSON, rowID)
+			if err != nil {
+				return err
 			}
+			params := map[string]string{"list_id": listID, "cells": cells}
 			if g.DryRun {
-				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] slackLists.items.update list_id=%s id=%s\n", listID, itemID)
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] slackLists.items.update list_id=%s row_id=%s\n", listID, rowID)
 				return nil
 			}
 			client, err := buildClient(g)
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("slackLists.items.update", params, nil); err != nil {
+			raw, err := client.Call("slackLists.items.update", params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "item updated")
 			return nil
 		},
 	}
+	cmd.Long = "Update an item in a List.\n\n" + listFieldsExample + `
+
+--row-id is optional: when provided, slk injects it as the row_id of any cell
+that does not already specify one. Cells with an explicit row_id keep their
+own value, so the same call can update multiple rows at once.`
 	cmd.Flags().StringVar(&listID, "id", "", "list ID")
-	cmd.Flags().StringVar(&itemID, "item", "", "item ID")
-	cmd.Flags().StringVar(&fieldsJSON, "fields", "[]", "updated cells as JSON array")
+	cmd.Flags().StringVar(&rowID, "row-id", "", "row to update; injected as cells[].row_id when a cell omits it")
+	cmd.Flags().StringVar(&fieldsJSON, "fields", "[]", "updated cells as JSON array (see Long help for shape)")
 	cmd.MarkFlagRequired("id")
-	cmd.MarkFlagRequired("item")
 	return cmd
+}
+
+// injectRowID fills row_id on cells that omit it, using the fallback. Returns
+// the cells JSON ready for slackLists.items.update. Errors when fieldsJSON is
+// not a JSON array, or when both the fallback and any cell's row_id are empty.
+func injectRowID(fieldsJSON, fallback string) (string, error) {
+	trimmed := strings.TrimSpace(fieldsJSON)
+	if trimmed == "" || trimmed == "[]" {
+		if fallback == "" {
+			return "", fmt.Errorf("--fields is empty and --row-id is not set; nothing to update")
+		}
+		// An empty cells array would no-op the update; still validate the input
+		// so callers see a clear error instead of an opaque Slack response.
+		return fieldsJSON, nil
+	}
+	var cells []map[string]any
+	if err := json.Unmarshal([]byte(fieldsJSON), &cells); err != nil {
+		return "", fmt.Errorf("--fields must be a JSON array of cell objects: %w", err)
+	}
+	for i, cell := range cells {
+		existing, _ := cell["row_id"].(string)
+		if existing == "" {
+			if fallback == "" {
+				return "", fmt.Errorf("cell %d has no row_id and --row-id is not set", i)
+			}
+			cell["row_id"] = fallback
+			cells[i] = cell
+		}
+	}
+	b, err := json.Marshal(cells)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
