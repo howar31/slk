@@ -43,6 +43,23 @@ slk channel invite --channel C123 --users U1,U2
 slk api <method> --params '{"k":"v"}'   # escape hatch for any method
 ```
 
+## Multi-line content
+
+Shell `"\n"` is literal. For multi-line markdown/text pass a file or stdin:
+
+```
+slk canvas update --id F0… --action prepend --markdown-file entry.md
+cat entry.md | slk msg send --channel C0… --text-file -
+```
+
+File-flag pairs: `--markdown` / `--markdown-file` (canvas), `--text` / `--text-file` (msg/thread).
+
+## Drafts
+
+`msg draft` creates one-shot; list/delete only work in the Slack client UI
+(public API doesn't grant draft management to xoxp tokens). The output URL
+opens the channel where the draft is attached.
+
 ## Security rules
 
 - Never print tokens. They live in `~/.config/slk/config.toml` (mode 0600).
