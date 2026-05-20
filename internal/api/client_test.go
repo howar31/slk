@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestClient_Call_Success(t *testing.T) {
@@ -104,5 +105,43 @@ func TestClient_Call_JSONBody(t *testing.T) {
 	json.Unmarshal(raw, &got)
 	if got["ok"] != true {
 		t.Fatalf("expected ok:true, got %v", got)
+	}
+}
+
+func TestClient_Call_RateLimitRetriesExhausted(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Retry-After", "0") // 1s default via parseRetryAfter — keep total bounded
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	c := New("xoxp-test")
+	c.BaseURL = srv.URL
+	c.MaxRetries = 2 // 3 total attempts (initial + 2 retries)
+
+	start := time.Now()
+	_, err := c.Call("conversations.history", map[string]string{"channel": "C1"}, nil)
+	if err == nil {
+		t.Fatal("expected error after exhausted retries")
+	}
+
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T (%v)", err, err)
+	}
+	if apiErr.SlackError != "ratelimited" {
+		t.Fatalf("expected SlackError=ratelimited, got %q", apiErr.SlackError)
+	}
+	if got := ExitCodeFor(apiErr.SlackError); got != 5 {
+		t.Errorf("ExitCodeFor(ratelimited) = %d, want 5", got)
+	}
+	if calls != c.MaxRetries+1 {
+		t.Errorf("expected %d total HTTP calls, got %d", c.MaxRetries+1, calls)
+	}
+	// Sanity bound — should not run away into infinite retries.
+	if time.Since(start) > 30*time.Second {
+		t.Errorf("retry loop took too long: %v", time.Since(start))
 	}
 }
