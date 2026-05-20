@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/howar31/slk/internal/output"
+	"github.com/howar31/slk/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +21,36 @@ type msgItem struct {
 
 func (m msgItem) Concise() string {
 	return fmt.Sprintf("%s: %s [%s]", m.User, m.Text, shortTS(m.TS))
+}
+
+// slackMessage is the subset of fields slk renders from
+// conversations.history / conversations.replies. Bot-posted messages leave
+// `user` empty and populate `username` and/or `bot_profile.name` instead.
+type slackMessage struct {
+	User       string `json:"user"`
+	Username   string `json:"username"`
+	BotID      string `json:"bot_id"`
+	BotProfile struct {
+		Name string `json:"name"`
+	} `json:"bot_profile"`
+	Text     string `json:"text"`
+	TS       string `json:"ts"`
+	ThreadTS string `json:"thread_ts"`
+}
+
+// messageDisplay picks the best human-visible name for a message.
+// Order: resolved user → username → bot_profile.name → bot_id.
+func messageDisplay(r *resolve.Resolver, m slackMessage) string {
+	if m.User != "" {
+		return resolveUser(r, m.User)
+	}
+	if m.Username != "" {
+		return m.Username
+	}
+	if m.BotProfile.Name != "" {
+		return m.BotProfile.Name
+	}
+	return m.BotID
 }
 
 // shortTS renders a Slack ts (e.g. "1779191572.123") as "MM-DD HH:MM".
@@ -79,12 +110,7 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 				return nil
 			}
 			var resp struct {
-				Messages []struct {
-					User     string `json:"user"`
-					Text     string `json:"text"`
-					TS       string `json:"ts"`
-					ThreadTS string `json:"thread_ts"`
-				} `json:"messages"`
+				Messages []slackMessage `json:"messages"`
 			}
 			if err := json.Unmarshal(raw, &resp); err != nil {
 				return err
@@ -93,7 +119,7 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 			items := make([]msgItem, len(resp.Messages))
 			for i, m := range resp.Messages {
 				items[i] = msgItem{
-					User:   resolveUser(r, m.User),
+					User:   messageDisplay(r, m),
 					Text:   m.Text,
 					TS:     m.TS,
 					Thread: m.ThreadTS,
@@ -141,6 +167,10 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
 			var resp struct {
 				TS string `json:"ts"`
 			}
@@ -178,8 +208,13 @@ func newMsgWriteCommand(g *GlobalFlags, use, method string, flags []string) *cob
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call(method, params, nil); err != nil {
+			raw, err := client.Call(method, params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), use+" ok")
 			return nil
@@ -213,8 +248,13 @@ func newMsgUpdateCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("chat.update", params, nil); err != nil {
+			raw, err := client.Call("chat.update", params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "update ok")
 			return nil
@@ -244,8 +284,13 @@ func newMsgReactCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("reactions.add", params, nil); err != nil {
+			raw, err := client.Call("reactions.add", params, nil)
+			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "reacted")
 			return nil
@@ -324,10 +369,20 @@ func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if _, err := client.Call("chat.scheduleMessage", params, nil); err != nil {
+			raw, err := client.Call("chat.scheduleMessage", params, nil)
+			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "scheduled")
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			id := parseScheduledMessageID(raw)
+			if id != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "scheduled %s at %s\n", id, at)
+			} else {
+				fmt.Fprintln(cmd.OutOrStdout(), "scheduled")
+			}
 			return nil
 		},
 	}
@@ -340,6 +395,17 @@ func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
 	cmd.MarkFlagRequired("channel")
 	cmd.MarkFlagRequired("at")
 	return cmd
+}
+
+// parseScheduledMessageID extracts scheduled_message_id from a
+// chat.scheduleMessage response. Needed to cancel via
+// chat.deleteScheduledMessage; Slack returns the ID only at create time.
+func parseScheduledMessageID(raw []byte) string {
+	var resp struct {
+		ID string `json:"scheduled_message_id"`
+	}
+	_ = json.Unmarshal(raw, &resp)
+	return resp.ID
 }
 
 func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {
@@ -379,6 +445,10 @@ func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {
 			raw, err := client.Call("drafts.create", params, nil)
 			if err != nil {
 				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
 			}
 			var resp struct {
 				Draft struct {

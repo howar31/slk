@@ -8,6 +8,51 @@ import (
 	"testing"
 )
 
+func TestParseScheduledMessageID(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"present", `{"ok":true,"scheduled_message_id":"Q0B5","channel":"C0","post_at":1779200000}`, "Q0B5"},
+		{"missing", `{"ok":true}`, ""},
+		{"malformed", `not json`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := parseScheduledMessageID([]byte(tc.raw)); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMessageDisplay_Fallbacks(t *testing.T) {
+	mk := func(user, username, botName, botID string) slackMessage {
+		m := slackMessage{User: user, Username: username, BotID: botID}
+		m.BotProfile.Name = botName
+		return m
+	}
+	cases := []struct {
+		name string
+		m    slackMessage
+		want string
+	}{
+		{"user wins over username", mk("U1", "ignored", "ignored", "B1"), "U1"},
+		{"username when user empty", mk("", "incoming-webhook", "ignored", "B1"), "incoming-webhook"},
+		{"bot profile name when username empty", mk("", "", "kintai", "B1"), "kintai"},
+		{"bot id when nothing else", mk("", "", "", "B1"), "B1"},
+		{"empty everything", mk("", "", "", ""), ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := messageDisplay(nil, tc.m); got != tc.want {
+				t.Fatalf("messageDisplay = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestMsgMessage_Concise(t *testing.T) {
 	m := msgItem{User: "Bob", Text: "hi", TS: "1779191572.0"}
 	got := m.Concise()
