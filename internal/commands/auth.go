@@ -126,6 +126,9 @@ func newAuthLogoutCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if _, ok := cfg.Profiles[args[0]]; !ok {
+				return fmt.Errorf("profile %q not found", args[0])
+			}
 			delete(cfg.Profiles, args[0])
 			if cfg.Active == args[0] {
 				cfg.Active = ""

@@ -9,6 +9,69 @@ import (
 	"github.com/howar31/slk/internal/auth"
 )
 
+func TestAuthLogout_MissingProfileErrors(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+
+	// Seed an unrelated profile so the config file exists but does not
+	// contain the profile we attempt to remove.
+	set := newAuthCommand(&GlobalFlags{})
+	set.SetArgs([]string{"set-token", "--profile", "work", "--user", "xoxp-x", "--workspace", "acme"})
+	if err := set.Execute(); err != nil {
+		t.Fatalf("seed set-token: %v", err)
+	}
+
+	logout := newAuthCommand(&GlobalFlags{})
+	logout.SetArgs([]string{"logout", "ghost"})
+	err := logout.Execute()
+	if err == nil {
+		t.Fatal("logout on missing profile should error")
+	}
+	if !strings.Contains(err.Error(), "ghost") {
+		t.Fatalf("error %q does not mention the missing profile", err)
+	}
+
+	cfg, err := auth.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("reload config: %v", err)
+	}
+	if _, ok := cfg.Profiles["work"]; !ok {
+		t.Fatal("logout error path should not mutate other profiles")
+	}
+}
+
+func TestAuthLogout_RemovesExisting(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+
+	set := newAuthCommand(&GlobalFlags{})
+	set.SetArgs([]string{"set-token", "--profile", "dummy", "--user", "xoxp-d", "--workspace", "test"})
+	if err := set.Execute(); err != nil {
+		t.Fatalf("seed set-token: %v", err)
+	}
+
+	logout := newAuthCommand(&GlobalFlags{})
+	var out bytes.Buffer
+	logout.SetOut(&out)
+	logout.SetArgs([]string{"logout", "dummy"})
+	if err := logout.Execute(); err != nil {
+		t.Fatalf("logout existing: %v", err)
+	}
+	if !strings.Contains(out.String(), "removed profile") {
+		t.Fatalf("missing success line: %q", out.String())
+	}
+
+	cfg, err := auth.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("reload config: %v", err)
+	}
+	if _, ok := cfg.Profiles["dummy"]; ok {
+		t.Fatal("profile still present after logout")
+	}
+}
+
 func TestAuthSetTokenAndStatus(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
