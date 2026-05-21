@@ -28,6 +28,35 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       - uses: actions/attest-build-provenance@v3
         with:
           subject-path: 'dist/*.tar.gz'
+
+  publish-npm:
+    needs: goreleaser
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Sync npm version with git tag
+        working-directory: npm
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          npm version "$VER" --no-git-tag-version
+      - name: Publish to npm
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+      - name: Smoke test installed package
+        run: |
+          sleep 30
+          mkdir /tmp/slk-smoke && cd /tmp/slk-smoke
+          npm init -y >/dev/null
+          npm install --no-save "@howar31/slk@${GITHUB_REF_NAME#v}"
+          ./node_modules/.bin/slk --version

@@ -17,7 +17,7 @@ exposes `--raw` when a caller wants full API responses.
 - [Quick start](#quick-start)
 - [Why slk?](#why-slk)
 - [Authentication](#authentication)
-- [AI agent skills](#ai-agent-skills)
+- [Agent setup](#agent-setup)
 - [Usage](#usage)
   - [Global flags](#global-flags)
   - [Multi-line content](#multi-line-content)
@@ -41,16 +41,25 @@ exposes `--raw` when a caller wants full API responses.
 
 ## Installation
 
-### From source via `go install` (current primary path)
+### Homebrew (macOS / Linux)
 
 ```bash
-go install github.com/howar31/slk/cmd/slk@latest
+brew install howar31/tap/slk
 ```
 
-This places `slk` in `$GOBIN` (typically `$HOME/go/bin`). Make sure `$GOBIN` is on your
-`$PATH`.
+Adds the `howar31/homebrew-tap` formula automatically on first install.
 
-### Pre-built binaries
+### npm (anywhere Node.js 18+ runs)
+
+```bash
+npm install -g @howar31/slk
+```
+
+The package is scoped (`@howar31/slk`) because the unscoped name `slk` is already taken on
+npm. `postinstall` downloads the matching prebuilt binary from GitHub Releases and verifies
+its SHA256 checksum.
+
+### Pre-built binary
 
 Download from [GitHub Releases](https://github.com/howar31/slk/releases).
 Replace `<os>` with `darwin` or `linux`, and `<arch>` with `amd64` or `arm64`.
@@ -65,10 +74,21 @@ sudo mv slk /usr/local/bin/
 slk --version
 ```
 
-### Homebrew
+### `go install` (Go 1.25+)
 
-Planned for the v0.1.0 release. Until the `howar31/homebrew-tap` repo is published, use the
-`go install` path above.
+```bash
+go install github.com/howar31/slk/cmd/slk@latest
+```
+
+Places `slk` in `$GOBIN` (typically `$HOME/go/bin`); ensure `$GOBIN` is on your `$PATH`.
+
+### From source
+
+```bash
+git clone https://github.com/howar31/slk
+cd slk
+go build -ldflags "-X main.version=dev" -o slk ./cmd/slk
+```
 
 ## Quick start
 
@@ -179,20 +199,36 @@ Active credential resolution, highest precedence first:
 3. `SLK_PROFILE` environment variable.
 4. The `active` profile in the config file.
 
-## AI agent skills
+## Agent setup
 
-`slk` ships a Claude Code skill at `skill/SKILL.md`. To install it:
+### Claude Code
 
 ```bash
 mkdir -p ~/.claude/skills/slk
 cp ./skill/SKILL.md ~/.claude/skills/slk/SKILL.md
 ```
 
-Claude Code will activate the skill automatically when relevant.
+Claude Code activates the skill automatically when a task mentions Slack.
 
-For other AI agents (Cursor, Gemini CLI, GitHub Copilot, aider, …) `slk` is just a shell
-command. Either reference `slk --help` from your agent's instructions, or paste the
-`SKILL.md` content into the agent's persistent rules file (`.cursorrules`, `GEMINI.md`, etc.).
+### Gemini CLI
+
+```bash
+gemini extensions install https://github.com/howar31/slk
+```
+
+Requires `slk` on your `$PATH` (install via Homebrew or npm first).
+
+### OpenClaw
+
+OpenClaw reads `skill/SKILL.md`'s frontmatter. If the `slk` binary is missing, OpenClaw
+auto-installs it from one of the `install:` specs in the skill metadata (npm `@howar31/slk`,
+the Homebrew tap, or `go install`).
+
+### Cursor / aider / others
+
+Either reference `slk --help` from your agent's instruction file, or paste the contents of
+[`skill/SKILL.md`](skill/SKILL.md) into the agent's persistent rules file (e.g.,
+`.cursorrules`, `GEMINI.md`).
 
 ## Usage
 

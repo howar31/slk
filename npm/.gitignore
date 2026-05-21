@@ -1,0 +1,3 @@
+bin/
+*.tgz
+node_modules/

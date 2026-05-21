@@ -1,0 +1,53 @@
+{
+  "name": "@howar31/slk",
+  "description": "Agent-facing Slack CLI for AI agents.",
+  "version": "0.0.0",
+  "license": "MIT",
+  "author": "Howar31",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/howar31/slk.git"
+  },
+  "homepage": "https://github.com/howar31/slk",
+  "bugs": {
+    "url": "https://github.com/howar31/slk/issues"
+  },
+  "bin": {
+    "slk": "run.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "preferUnplugged": true,
+  "keywords": [
+    "cli",
+    "slack",
+    "agent",
+    "ai-agent",
+    "automation"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "supportedPlatforms": {
+    "darwin-arm64": {
+      "artifact": "slk_darwin_arm64.tar.gz",
+      "binary": "slk"
+    },
+    "darwin-x64": {
+      "artifact": "slk_darwin_amd64.tar.gz",
+      "binary": "slk"
+    },
+    "linux-arm64": {
+      "artifact": "slk_linux_arm64.tar.gz",
+      "binary": "slk"
+    },
+    "linux-x64": {
+      "artifact": "slk_linux_amd64.tar.gz",
+      "binary": "slk"
+    }
+  }
+}

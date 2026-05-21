@@ -160,14 +160,30 @@ outside the public tree).
 
 ## Deploy
 
-`.goreleaser.yaml` builds `darwin` and `linux` × `amd64`/`arm64` binaries
-with `-trimpath` and `-s -w -X main.version=<tag>`. A Homebrew tap is
-configured (`howar31/homebrew-tap`) but the tap repository has not been
-created yet — releasing currently requires either creating the tap or
-removing the `brews:` block before tagging.
+Releases are tag-driven. Push a semver tag matching
+`v[0-9]+.[0-9]+.[0-9]+*` and `.github/workflows/release.yml`:
 
-There is no CI workflow in `.github/workflows/`. Releases are produced
-locally via `goreleaser release` against a signed tag.
+1. Runs `goreleaser release --clean` on ubuntu-latest, producing
+   `slk_<os>_<arch>.tar.gz` for `darwin/linux × amd64/arm64` plus
+   `checksums.txt`.
+2. Creates the GitHub Release with the artifacts (`release.prerelease:
+   auto` marks tags containing `-`, e.g. `v0.1.0-rc1`, as prereleases).
+3. Generates SLSA build provenance attestations via
+   `actions/attest-build-provenance@v3`.
+4. Pushes a Homebrew formula update to `howar31/homebrew-tap` (uses the
+   `HOMEBREW_TAP_TOKEN` PAT).
+5. For non-prerelease tags, runs a `publish-npm` job that bumps
+   `npm/package.json`'s version to match the tag and publishes
+   `@howar31/slk` (uses `NPM_TOKEN`). Prereleases skip the npm publish.
+
+The `npm/` directory is a thin postinstall-driven wrapper:
+
+| File | Responsibility |
+|---|---|
+| `package.json` | Declares `bin.slk = run.js`, `scripts.postinstall = install.js`, and `supportedPlatforms` (4 darwin/linux × arm64/x64 entries). Version is overwritten by CI at publish time. |
+| `install.js` | Downloads the matching tarball + `checksums.txt` from GitHub Releases, verifies SHA256, extracts to `bin/`. |
+| `platform.js` | Maps `os.type()`/`os.arch()` to a `supportedPlatforms` key. |
+| `run.js` | Re-execs `bin/slk`; triggers `install.js` if the binary is missing (e.g. when the user ran `npm install --ignore-scripts`). |
 
 Runtime state:
 

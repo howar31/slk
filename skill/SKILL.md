@@ -8,6 +8,17 @@ metadata:
     requires:
       bins:
         - slk
+    install:
+      - kind: node
+        package: "@howar31/slk"
+        bins: [slk]
+      - kind: brew
+        tap: howar31/homebrew-tap
+        formula: slk
+        bins: [slk]
+      - kind: go
+        module: github.com/howar31/slk/cmd/slk
+        bins: [slk]
 ---
 
 # slk — Agent-facing Slack CLI

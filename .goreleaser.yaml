@@ -16,5 +16,16 @@ archives:
 checksum:
   name_template: 'checksums.txt'
   algorithm: sha256
-# brews block intentionally omitted in PR 1; restored in PR 2 after the
-# howar31/homebrew-tap repo is ready and HOMEBREW_TAP_TOKEN secret exists.
+release:
+  prerelease: auto
+brews:
+  - repository:
+      owner: howar31
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    description: Agent-facing Slack CLI for AI agents.
+    license: MIT
+    homepage: https://github.com/howar31/slk
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/slk --version")

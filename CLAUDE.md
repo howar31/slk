@@ -13,7 +13,8 @@ This file is index-only; do not duplicate SPEC.md content here.
 go build -ldflags "-X main.version=0.1.0" -o slk ./cmd/slk
 go test ./...                               # uncached → prefix with go clean -testcache
 go test ./internal/commands/ -run TestX -v  # focused
-goreleaser release --clean                  # darwin/linux × amd64/arm64
+git tag v0.1.0 && git push origin v0.1.0    # tag-driven release via GHA
+goreleaser release --snapshot --clean       # local dry-run only
 ```
 
 ## Conventions
@@ -30,6 +31,7 @@ goreleaser release --clean                  # darwin/linux × amd64/arm64
 - Test fixtures and example identifiers use the scrubbed convention: `Alice` / `Bob` / `C0123456789` / `U0123456789` / `F01234567`. Do NOT introduce real names or real channel/user IDs into committed code or docs.
 - When dispatching subagents for code work, explicitly tell them: "Do NOT run any commit-helper or documentation skill. Do NOT create SPEC.md, CLAUDE.md, or top-level README.md."
 - Tokens live in `~/.config/slk/config.toml` (mode 0600). Never print or log token strings.
+- Release is GHA-on-tag only (`.github/workflows/release.yml`). Do NOT run `goreleaser release` (without `--snapshot`) locally against the real `origin` remote — it would create a partial release and push a partial Homebrew formula.
 
 ## Slack-side traps (documented in README + SPEC)
 - `chat.deleteScheduledMessage` may return ok=true for schedules within ~5 min of `post_at` yet still fire.
