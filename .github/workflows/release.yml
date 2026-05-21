@@ -24,7 +24,7 @@ jobs:
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: latest
+          version: '~> v2'
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -55,8 +55,15 @@ jobs:
         run: npm publish --access public
       - name: Smoke test installed package
         run: |
-          sleep 30
           mkdir /tmp/slk-smoke && cd /tmp/slk-smoke
           npm init -y >/dev/null
-          npm install --no-save "@howar31/slk@${GITHUB_REF_NAME#v}"
+          # Newly published scoped packages can take a minute to propagate
+          # across the npm registry; retry install until it resolves.
+          for i in $(seq 1 10); do
+            if npm install --no-save "@howar31/slk@${GITHUB_REF_NAME#v}"; then
+              break
+            fi
+            echo "npm registry not ready (attempt $i/10); waiting 30s..."
+            sleep 30
+          done
           ./node_modules/.bin/slk --version

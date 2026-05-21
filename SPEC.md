@@ -176,6 +176,15 @@ Releases are tag-driven. Push a semver tag matching
    `npm/package.json`'s version to match the tag and publishes
    `@howar31/slk` (uses `NPM_TOKEN`). Prereleases skip the npm publish.
 
+Both release secrets expire and must be rotated, or the corresponding
+step fails on the next tag:
+
+- `NPM_TOKEN` — npm granular token, **max 90-day** expiry (npm's hard
+  limit). Regenerate at npmjs.com (Read/write on `@howar31`) and
+  re-run `gh secret set NPM_TOKEN --repo howar31/slk`.
+- `HOMEBREW_TAP_TOKEN` — GitHub fine-grained PAT, up to ~1-year expiry,
+  scope **Contents: Read and write** on `howar31/homebrew-tap` only.
+
 The `npm/` directory is a thin postinstall-driven wrapper:
 
 | File | Responsibility |
