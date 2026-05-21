@@ -97,9 +97,14 @@ External dependencies are intentionally narrow:
 ├── docs/superpowers/          # design spec + implementation plan
 │   ├── specs/2026-05-19-slack-cli-design.md
 │   └── plans/2026-05-19-slk-slack-cli.md
+├── .github/
+│   ├── workflows/release.yml  # tag-driven goreleaser + npm + homebrew
+│   ├── dependabot.yml         # weekly gomod + github-actions updates
+│   └── release.yml            # auto release-notes categorization by label
 ├── .goreleaser.yaml           # darwin/linux × amd64/arm64 + homebrew tap
 ├── go.mod / go.sum
 ├── README.md
+├── SECURITY.md                # vulnerability reporting + token policy
 └── LICENSE                    # MIT
 ```
 
@@ -184,6 +189,22 @@ step fails on the next tag:
   re-run `gh secret set NPM_TOKEN --repo howar31/slk`.
 - `HOMEBREW_TAP_TOKEN` — GitHub fine-grained PAT, up to ~1-year expiry,
   scope **Contents: Read and write** on `howar31/homebrew-tap` only.
+
+Dependency and release-notes automation:
+
+- `.github/dependabot.yml` opens weekly PRs for `gomod` and
+  `github-actions` (limit 5 each, `chore`-prefixed commits). Repo-side
+  Dependabot alerts and automated security fixes are enabled.
+- `.github/release.yml` categorizes the auto-generated GitHub Release
+  notes by PR label (Features / Fixes / Documentation / Dependencies /
+  Maintenance / Other).
+- Repo merge policy: merge commits disabled — squash and rebase only,
+  for linear history; head branches auto-delete on merge.
+
+Security reporting: `SECURITY.md` directs vulnerability reports to
+GitHub private advisories (private vulnerability reporting is enabled);
+it reiterates that tokens live in `~/.config/slk/config.toml` (`0600`)
+and are never printed or logged.
 
 The `npm/` directory is a thin postinstall-driven wrapper:
 
