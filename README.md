@@ -52,7 +52,18 @@ This places `slk` in `$GOBIN` (typically `$HOME/go/bin`). Make sure `$GOBIN` is 
 
 ### Pre-built binaries
 
-Planned for the v0.1.0 release. Until then, build from source.
+Download from [GitHub Releases](https://github.com/howar31/slk/releases).
+Replace `<os>` with `darwin` or `linux`, and `<arch>` with `amd64` or `arm64`.
+
+```bash
+VER=0.1.0
+curl -sLO https://github.com/howar31/slk/releases/download/v${VER}/slk_<os>_<arch>.tar.gz
+curl -sLO https://github.com/howar31/slk/releases/download/v${VER}/checksums.txt
+shasum -a 256 -c checksums.txt --ignore-missing
+tar xzf slk_<os>_<arch>.tar.gz
+sudo mv slk /usr/local/bin/
+slk --version
+```
 
 ### Homebrew
 

@@ -12,9 +12,9 @@ builds:
       - -s -w -X main.version={{.Version}}
 archives:
   - formats: [tar.gz]
-brews:
-  - repository:
-      owner: howar31
-      name: homebrew-tap
-    description: Agent-facing Slack CLI
-    license: MIT
+    name_template: 'slk_{{ .Os }}_{{ .Arch }}'
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+# brews block intentionally omitted in PR 1; restored in PR 2 after the
+# howar31/homebrew-tap repo is ready and HOMEBREW_TAP_TOKEN secret exists.
