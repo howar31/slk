@@ -2,7 +2,6 @@
 
 **Date:** 2026-05-20
 **Status:** Draft, pending user review
-**Author:** Sera
 **Companion plan:** `docs/superpowers/plans/2026-05-20-slk-distribution.md` (to be written by writing-plans)
 **Inspiration:** `googleworkspace/cli` (Rust, ~26k stars) — distribution model studied at the same date.
 

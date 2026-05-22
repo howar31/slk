@@ -9,7 +9,7 @@ official Slack MCP connector's verbose JSON envelopes into the model's
 context window. The CLI emits curated, low-token output by default and
 exposes `--raw` for callers that want full API responses.
 
-Primary consumer: a developer agent (Claude Code / Sera-class) running on
+Primary consumer: a developer agent (e.g. Claude Code) running on
 macOS or Linux, authenticated against the operator's own Slack app via
 OAuth user tokens (`xoxp-…`). slk replaces the 13 Slack MCP tools the
 operator has connected, with 1:1 capability parity.
