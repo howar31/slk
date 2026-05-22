@@ -61,7 +61,12 @@ External dependencies are intentionally narrow:
 - `github.com/spf13/cobra` (+ `pflag`) for the command tree
 - `github.com/BurntSushi/toml` for config persistence
 - `golang.org/x/net/html` for the canvas converter
-- `crypto/rand` for draft `client_msg_id` UUIDs
+- `github.com/zalando/go-keyring` for the opt-in OS-keyring backend
+  that holds the at-rest encryption key
+- `crypto/aes` + `crypto/cipher` (AES-256-GCM) for credential
+  encryption at rest
+- `crypto/rand` for the AES key, GCM nonces, and draft `client_msg_id`
+  UUIDs
 - standard library for everything else (HTTP, JSON, files)
 
 ## Layout
@@ -76,6 +81,9 @@ External dependencies are intentionally narrow:
 │   │   └── paginate.go        # CallAll: walks next_cursor up to N pages
 │   ├── auth/                  # credential management
 │   │   ├── store.go           # TOML config at ~/.config/slk/config.toml
+│   │   ├── crypto.go          # AES-256-GCM field encrypt/decrypt
+│   │   ├── keyprovider.go     # key file / OS-keyring backends
+│   │   ├── status.go          # EncryptionStatus line for `auth status`
 │   │   ├── token.go           # ResolveToken precedence
 │   │   ├── oauth.go           # local-callback OAuth flow
 │   │   └── errors.go          # AuthError → exit code 3
@@ -227,10 +235,19 @@ The `npm/` directory is a thin postinstall-driven wrapper:
 Runtime state:
 
 - OAuth tokens live in `~/.config/slk/config.toml` (mode `0600`,
-  TOML-encoded, multi-profile).
+  TOML-encoded, multi-profile). The `user_token`, `bot_token`, and
+  `client_secret` fields are encrypted at rest with AES-256-GCM
+  (`enc:v1:` prefix). The 32-byte key is held in the OS keyring or, for
+  headless/agent use, a key file at `~/.config/slk/.encryption_key`
+  (mode `0600`); the backend is chosen by `SLK_KEYRING_BACKEND` (`auto`
+  default — keyring if available, else file) and recorded as
+  `key_backend` in the config. Tokens set via `set-token`/`login` are
+  encrypted on write; a pre-existing plaintext value is still read and
+  is encrypted on the next write (no re-auth).
 - The ID-to-name resolver caches in `~/.config/slk/cache/` (mode `0700`).
-- Two env overrides: `SLK_PROFILE` (active profile) and `SLK_TOKEN`
-  (raw token, highest precedence).
+- Env overrides: `SLK_PROFILE` (active profile), `SLK_TOKEN` (raw token,
+  highest precedence), `SLK_CONFIG` (config path), and
+  `SLK_KEYRING_BACKEND` (encryption-key backend).
 
 ## Known Limitations / Non-goals
 
@@ -299,3 +316,12 @@ Runtime state:
   agents read the `update_available` / `checked` JSON fields rather than
   the exit code. Plain `version` performs no network I/O, preserving the
   offline, low-latency default.
+- **Credentials are encrypted at rest, not just file-permissioned.**
+  Sensitive fields use AES-256-GCM with the key in the OS keyring
+  (opt-in, real local protection) or a key file (default; defends
+  against accidental disclosure such as dotfile sync or screen-share,
+  but not a local attacker who can already read `~/.config/slk/`).
+  Default backend is `auto` because slk runs headless-first and must
+  never block on an interactive keychain unlock. `Load` tolerates a
+  pre-existing plaintext value and encrypts it on the next `Save`; it
+  never rewrites the config on read.

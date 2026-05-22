@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +14,7 @@ func TestAuthLogout_MissingProfileErrors(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
 	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
 
 	// Seed an unrelated profile so the config file exists but does not
 	// contain the profile we attempt to remove.
@@ -45,6 +47,7 @@ func TestAuthLogout_RemovesExisting(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
 	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
 
 	set := newAuthCommand(&GlobalFlags{})
 	set.SetArgs([]string{"set-token", "--profile", "dummy", "--user", "xoxp-d", "--workspace", "test"})
@@ -76,6 +79,7 @@ func TestAuthSetTokenAndStatus(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
 	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
 
 	set := newAuthCommand(&GlobalFlags{})
 	set.SetArgs([]string{"set-token", "--profile", "work", "--user", "xoxp-x", "--workspace", "acme"})
@@ -100,5 +104,21 @@ func TestAuthSetTokenAndStatus(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "xoxp-x") {
 		t.Fatalf("status output leaked the raw token: %q", out.String())
+	}
+
+	if !strings.Contains(out.String(), "encryption:") {
+		t.Fatalf("status missing encryption indicator: %q", out.String())
+	}
+	if !strings.Contains(out.String(), "file") {
+		t.Fatalf("status should report the file backend: %q", out.String())
+	}
+
+	// The encrypted token must not be on disk in plaintext either.
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("read raw config: %v", err)
+	}
+	if strings.Contains(string(raw), "xoxp-x") {
+		t.Fatalf("config file leaked the plaintext token:\n%s", raw)
 	}
 }

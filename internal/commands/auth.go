@@ -88,6 +88,7 @@ func newAuthStatusCommand() *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s %s (workspace=%s user=%v bot=%v)\n",
 					marker, name, p.Workspace, p.UserToken != "", p.BotToken != "")
 			}
+			fmt.Fprintln(cmd.OutOrStdout(), auth.EncryptionStatus(cfg))
 			return nil
 		},
 	}

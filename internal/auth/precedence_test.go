@@ -13,6 +13,7 @@ import (
 //  3. else: cfg.Active is used
 //  4. identity (user|bot) selects the right token within a profile
 func TestResolveToken_PrecedenceMatrix(t *testing.T) {
+	t.Setenv(keyEnvVar, backendFile)
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
 
@@ -76,4 +77,31 @@ func TestResolveToken_PrecedenceMatrix(t *testing.T) {
 		t.Errorf("ConfigPath = %q, want %q", got, cfgPath)
 	}
 	os.Unsetenv("SLK_CONFIG") // explicit; t.Setenv also cleans up
+}
+
+func TestResolveToken_UndecryptableTokenErrors(t *testing.T) {
+	// A profile whose token is ciphertext that no key can open (decryption was
+	// left to fail at Load) must surface as an *AuthError, not a leaked blob.
+	cfg := &Config{
+		Active: "work",
+		Profiles: map[string]Profile{
+			"work": {UserToken: encPrefix + "bm90LXJlYWwtY2lwaGVydGV4dA=="},
+		},
+	}
+	_, err := ResolveToken(cfg, "", "user", "")
+	if err == nil {
+		t.Fatal("expected an error for an undecryptable token")
+	}
+	if _, ok := err.(*AuthError); !ok {
+		t.Fatalf("expected *AuthError (exit 3), got %T", err)
+	}
+
+	// SLK_TOKEN must still bypass everything, even with a broken stored token.
+	tok, err := ResolveToken(cfg, "", "user", "xoxp-env")
+	if err != nil {
+		t.Fatalf("env override should bypass the broken token: %v", err)
+	}
+	if tok != "xoxp-env" {
+		t.Fatalf("env token = %q, want xoxp-env", tok)
+	}
 }
