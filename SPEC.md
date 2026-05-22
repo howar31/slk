@@ -51,10 +51,25 @@ non-standard `<lnk>`, code blocks (`class="prettyprint"`), checklists
 Update checking is special too: `slk version --check` does not touch
 Slack and needs no token. It performs a single read-only GET to the
 GitHub Releases API (`/repos/howar31/slk/releases/latest`, with a
-`User-Agent` header), compares the parsed `tag_name` against the build
-version, and reports whether a newer release exists. It never downloads
+`User-Agent` header), compares the parsed `tag_name` against the
+embedded `VERSION`, and reports whether a newer release exists. It never downloads
 or replaces the binary. Plain `slk version` / `slk --version` stay
 fully offline.
+
+The agent skill is a generated artifact, not a hand-maintained file. `slk
+generate-skill` (a hidden command) renders `skills/slk/SKILL.md` from the live
+Cobra command tree plus an embedded preamble template (`internal/skillgen`), so
+the code, `slk --help`, and the skill share one source and cannot drift. Each
+command carries `Annotations["slackMethod"]` (the Slack method it wraps) and, for
+mutating commands, `Annotations["write"]="true"`; the generator emits these as a
+per-command `**Slack API:**` line and a write `CAUTION` callout, and renders flag
+tables (`Required` from `MarkFlagRequired`, `Default` from the flag default). A
+CI job regenerates the skill and fails on any diff.
+
+The binary version is single-sourced: a committed `VERSION` file at the repo root
+is embedded via `//go:embed` (root `package slk`, `version.go` → `slk.Version`)
+and feeds `slk --version`, the skill's `metadata.version`, npm, and the release.
+There is no build-time `-ldflags` version injection.
 
 External dependencies are intentionally narrow:
 
@@ -73,59 +88,68 @@ External dependencies are intentionally narrow:
 
 ```
 .
-├── cmd/slk/main.go            # process entry; error→exit-code wiring
+├── VERSION                     # version source of truth (embedded via go:embed)
+├── version.go                  # package slk: //go:embed VERSION → slk.Version
+├── cmd/slk/main.go             # process entry; error→exit-code wiring; uses slk.Version
 ├── internal/
-│   ├── api/                   # HTTP client, error mapping, paginator
-│   │   ├── client.go          # api.Client; BaseURL overridable for tests
-│   │   ├── errors.go          # APIError + ExitCodeFor() mapping
-│   │   └── paginate.go        # CallAll: walks next_cursor up to N pages
-│   ├── auth/                  # credential management
-│   │   ├── store.go           # TOML config at ~/.config/slk/config.toml
-│   │   ├── crypto.go          # AES-256-GCM field encrypt/decrypt
-│   │   ├── keyprovider.go     # key file / OS-keyring backends
-│   │   ├── status.go          # EncryptionStatus line for `auth status`
-│   │   ├── token.go           # ResolveToken precedence
-│   │   ├── oauth.go           # local-callback OAuth flow
-│   │   └── errors.go          # AuthError → exit code 3
-│   ├── commands/              # Cobra command tree (one file per group)
-│   │   ├── root.go            # NewRootCommand + global flag binding
-│   │   ├── context.go         # GlobalFlags struct
-│   │   ├── clientutil.go      # buildClient(g) → *api.Client
-│   │   ├── input.go           # readContent: --text vs --text-file/stdin
-│   │   ├── lookup.go          # slackLookup + resolveUser wiring
-│   │   ├── api.go             # escape-hatch `slk api`
-│   │   ├── auth.go            # set-token / status / switch / logout / login
-│   │   ├── msg.go             # send / read / update / delete / react /
-│   │   │                      # schedule / draft + slackMessage helper
-│   │   ├── thread.go          # read / reply (uses --thread on both)
-│   │   ├── canvas.go          # create / read / update / list
-│   │   ├── channel.go         # create / archive / invite / topic / list
-│   │   ├── list.go            # Slack Lists: create / read / add-item /
-│   │   │                      # update-item; injectRowID helper
-│   │   ├── user.go            # info / profile / list (default-filter)
-│   │   ├── search.go          # messages / channels / users
-│   │   └── version.go         # version + --check GitHub-release probe
-│   ├── output/                # concise|json|jsonl|table renderers
-│   ├── quip/                  # canvas HTML→Markdown converter
+│   ├── api/                    # HTTP client, error mapping, paginator
+│   │   ├── client.go           # api.Client; BaseURL overridable for tests
+│   │   ├── errors.go           # APIError + ExitCodeFor() mapping
+│   │   └── paginate.go         # CallAll: walks next_cursor up to N pages
+│   ├── auth/                   # credential management
+│   │   ├── store.go            # TOML config at ~/.config/slk/config.toml
+│   │   ├── crypto.go           # AES-256-GCM field encrypt/decrypt
+│   │   ├── keyprovider.go      # key file / OS-keyring backends
+│   │   ├── status.go           # EncryptionStatus line for `auth status`
+│   │   ├── token.go            # ResolveToken precedence
+│   │   ├── oauth.go            # local-callback OAuth flow
+│   │   └── errors.go           # AuthError → exit code 3
+│   ├── commands/               # Cobra command tree (one file per group)
+│   │   ├── root.go             # NewRootCommand + global flag binding
+│   │   ├── context.go          # GlobalFlags struct
+│   │   ├── clientutil.go       # buildClient(g) → *api.Client
+│   │   ├── input.go            # readContent: --text vs --text-file/stdin
+│   │   ├── lookup.go           # slackLookup + resolveUser wiring
+│   │   ├── api.go              # escape-hatch `slk api`
+│   │   ├── auth.go             # set-token / status / switch / logout / login
+│   │   ├── msg.go              # send / read / update / delete / react /
+│   │   │                       # schedule / draft + slackMessage helper
+│   │   ├── thread.go           # read / reply (uses --thread on both)
+│   │   ├── canvas.go           # create / read / update / list
+│   │   ├── channel.go          # create / archive / invite / topic / list
+│   │   ├── list.go             # Slack Lists: create / read / add-item /
+│   │   │                       # update-item; injectRowID helper
+│   │   ├── user.go             # info / profile / list (default-filter)
+│   │   ├── search.go           # messages / channels / users
+│   │   ├── version.go          # version + --check GitHub-release probe
+│   │   └── generateskill.go    # hidden `generate-skill`: writes skills/slk/SKILL.md
+│   ├── skillgen/               # SKILL.md generator
+│   │   ├── skillgen.go         # Generate(tree, version) → markdown
+│   │   └── skill.md.tmpl       # embedded preamble + frontmatter template
+│   ├── output/                 # concise|json|jsonl|table renderers
+│   ├── quip/                   # canvas HTML→Markdown converter
 │   │   ├── convert.go
-│   │   └── testdata/          # canvas_fixture.{html,md} golden file
-│   └── resolve/               # ID→name cache (~/.config/slk/cache)
-├── skills/slk/SKILL.md        # generated agent skill (slk generate-skill)
-├── internal/skillgen/         # SKILL.md generator (template + renderer)
-├── docs/superpowers/          # design spec + implementation plan
-│   ├── specs/2026-05-19-slack-cli-design.md
-│   └── plans/2026-05-19-slk-slack-cli.md
+│   │   └── testdata/           # canvas_fixture.{html,md} golden file
+│   └── resolve/                # ID→name cache (~/.config/slk/cache)
+├── skills/slk/SKILL.md         # GENERATED agent skill — do not hand-edit
+├── npm/                        # npm wrapper (postinstall downloads the binary)
+│   ├── package.json            # bin.slk=run.js, postinstall=install.js
+│   ├── install.js              # download tarball + verify checksum
+│   ├── platform.js             # os/arch → supportedPlatforms key
+│   └── run.js                  # re-exec bin/slk (install if missing)
+├── gemini-extension.json       # Gemini CLI extension → contextFileName skills/slk/SKILL.md
+├── docs/superpowers/           # design specs + implementation plans
 ├── .github/
 │   ├── workflows/
-│   │   ├── ci.yml             # PR + push-to-main: gofmt, vet, build, test, goreleaser check
-│   │   └── release.yml        # VERSION-driven release: gate → tag → goreleaser + npm + homebrew
-│   ├── dependabot.yml         # security-only updates (routine version bumps disabled)
-│   └── release.yml            # auto release-notes categorization by label
-├── .goreleaser.yaml           # darwin/linux × amd64/arm64 + homebrew tap
+│   │   ├── ci.yml              # PR + push-main: gofmt, vet, build, test, goreleaser check, skill drift
+│   │   └── release.yml         # VERSION-driven release: gate → tag → goreleaser + npm + homebrew
+│   ├── dependabot.yml          # security-only updates (routine version bumps disabled)
+│   └── release.yml             # GitHub release-notes categorization by PR label
+├── .goreleaser.yaml            # darwin/linux × amd64/arm64 + homebrew tap + github-native changelog
 ├── go.mod / go.sum
 ├── README.md
-├── SECURITY.md                # vulnerability reporting + token policy
-└── LICENSE                    # MIT
+├── SECURITY.md                 # vulnerability reporting + token policy
+└── LICENSE                     # MIT
 ```
 
 ## Conventions
@@ -150,6 +174,15 @@ External dependencies are intentionally narrow:
   `--text` (inline, no shell newlines) or `--markdown-file` /
   `--text-file` (`-` for stdin) — both forms are mutually exclusive at
   runtime via `readContent`.
+- **Version source of truth**: the root `VERSION` file is embedded via
+  `//go:embed` (`version.go`); `slk --version`, the skill's
+  `metadata.version`, npm, and the release all derive from it. No
+  `-ldflags` version injection.
+- **The skill is generated**: `skills/slk/SKILL.md` is produced by `slk
+  generate-skill` from the Cobra tree — never hand-edit it. Per-command
+  `Annotations["slackMethod"]` and `Annotations["write"]` drive the
+  generated Slack-method line and the write `CAUTION`; CI fails if the
+  committed skill drifts from the generator.
 
 ## Verification
 
@@ -159,7 +192,9 @@ External dependencies are intentionally narrow:
 - CI (`.github/workflows/ci.yml`): on every PR and push to `main` (code
   paths only — `**.md`, `docs/**`, `LICENSE`, `.gitignore` are ignored),
   GitHub Actions runs a gofmt check, `go vet`, `go build ./...`,
-  `go test ./...`, and `goreleaser check` on Go 1.25.
+  `go test ./...`, and `goreleaser check` on Go 1.25, plus a `skill` job
+  that regenerates `skills/slk/SKILL.md` and fails on any `git diff`
+  (the drift guard).
 - Coverage snapshot: `go test ./... -coverpkg=./...
   -coverprofile=/tmp/slk.cov && go tool cover -func=/tmp/slk.cov`
 
@@ -343,3 +378,17 @@ Runtime state:
   never block on an interactive keychain unlock. `Load` tolerates a
   pre-existing plaintext value and encrypts it on the next `Save`; it
   never rewrites the config on read.
+- **The agent skill is a generated artifact (the binary is its SSOT).**
+  Rather than hand-maintain `SKILL.md`, `slk generate-skill` renders it
+  from the Cobra tree plus an embedded preamble, so the code, `--help`,
+  and the skill cannot drift; a CI drift guard enforces it. Per-command
+  `slackMethod` / `write` annotations supply the curated bits the tree
+  alone cannot (the Slack method, the write CAUTION).
+- **One committed `VERSION` file is the single version source**, embedded
+  via `//go:embed`, replacing `-ldflags` injection so a locally built
+  binary and the generated skill report the same version deterministically.
+- **Releases are VERSION-driven, not tag-driven.** Changing `VERSION` on
+  `main` triggers the release; a gate derives `v<VERSION>`, skips if it
+  already exists, else creates the tag and releases in one run. The tag is
+  an artifact, not the trigger — no manual tag step and no PAT (a
+  `GITHUB_TOKEN`-pushed tag would not start a separate workflow).

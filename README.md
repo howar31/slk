@@ -81,11 +81,11 @@ its SHA256 checksum.
 
 Download from [GitHub Releases](https://github.com/howar31/slk/releases).
 Replace `<os>` with `darwin` or `linux`, and `<arch>` with `amd64` or `arm64`.
+The `latest/download/` path always resolves to the newest release — no version to update.
 
 ```bash
-VER=0.1.0
-curl -sLO https://github.com/howar31/slk/releases/download/v${VER}/slk_<os>_<arch>.tar.gz
-curl -sLO https://github.com/howar31/slk/releases/download/v${VER}/checksums.txt
+curl -sLO https://github.com/howar31/slk/releases/latest/download/slk_<os>_<arch>.tar.gz
+curl -sLO https://github.com/howar31/slk/releases/latest/download/checksums.txt
 shasum -a 256 -c checksums.txt --ignore-missing
 tar xzf slk_<os>_<arch>.tar.gz
 sudo mv slk /usr/local/bin/
@@ -105,7 +105,7 @@ Places `slk` in `$GOBIN` (typically `$HOME/go/bin`); ensure `$GOBIN` is on your 
 ```bash
 git clone https://github.com/howar31/slk
 cd slk
-go build -ldflags "-X main.version=dev" -o slk ./cmd/slk
+go build -o slk ./cmd/slk   # version is read from the committed VERSION file
 ```
 
 ## Quick start
@@ -247,6 +247,12 @@ Active credential resolution, highest precedence first:
 
 ## Agent setup
 
+`slk`'s agent skill (`skills/slk/SKILL.md`) is **generated from the CLI itself** —
+every command, flag, the Slack method each one wraps, and a confirm-before-writing
+caution on destructive verbs. Because it is generated and drift-guarded in CI, your
+agent always sees accurate, in-sync docs instead of a hand-written file that lags the
+code. Install it with one command, or wire it up per agent below.
+
 ### Claude Code, Cursor, and other skill-aware agents
 
 ```bash
@@ -328,8 +334,8 @@ page).
 The check is best-effort: if GitHub is unreachable or rate-limited, slk prints
 your current version with a note and still exits `0`. Pass `--format json` for
 machine-readable output — agents can read the `update_available` and `checked`
-fields. A locally built binary reports as a development build and never claims
-an update is available.
+fields. A locally built binary reports the version from the committed `VERSION`
+file — the same value a released build embeds.
 
 Plain `slk version` and `slk --version` perform no network I/O.
 
@@ -456,8 +462,8 @@ These behaviors come from Slack itself, not from `slk`:
 ## Development
 
 ```bash
-# Build
-go build -ldflags "-X main.version=0.1.0" -o slk ./cmd/slk
+# Build (version is read from the committed VERSION file)
+go build -o slk ./cmd/slk
 
 # Run the full test suite (uncached)
 go clean -testcache && go test ./...
@@ -468,6 +474,9 @@ go tool cover -func=/tmp/slk.cov | tail -1
 
 # A single test
 go test ./internal/commands/ -run TestInjectRowID -v
+
+# Regenerate the agent skill after changing any command (CI enforces no drift)
+go run ./cmd/slk generate-skill
 ```
 
 Architecture, conventions, and design decisions live in [SPEC.md](SPEC.md).
