@@ -53,17 +53,20 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
-      - name: Smoke test installed package
+      - name: Smoke test packed package
+        working-directory: npm
         run: |
+          VER="${GITHUB_REF_NAME#v}"
+          # Install the locally packed wrapper rather than pulling the just-
+          # published version from the npm registry. Newly published scoped
+          # versions can take several minutes to become resolvable (ETARGET),
+          # which would falsely fail an otherwise-successful release. The packed
+          # tarball exercises the same path — postinstall downloads the binary
+          # from the already-published GitHub release (this job needs:
+          # goreleaser) and verifies its checksum — with no dependency on npm
+          # registry propagation.
+          TGZ="$(npm pack | tail -1)"
           mkdir /tmp/slk-smoke && cd /tmp/slk-smoke
           npm init -y >/dev/null
-          # Newly published scoped packages can take a minute to propagate
-          # across the npm registry; retry install until it resolves.
-          for i in $(seq 1 10); do
-            if npm install --no-save "@howar31/slk@${GITHUB_REF_NAME#v}"; then
-              break
-            fi
-            echo "npm registry not ready (attempt $i/10); waiting 30s..."
-            sleep 30
-          done
-          ./node_modules/.bin/slk --version
+          npm install --no-save "$GITHUB_WORKSPACE/npm/$TGZ"
+          ./node_modules/.bin/slk --version | grep -F "slk ${VER}"
