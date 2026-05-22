@@ -118,7 +118,7 @@ External dependencies are intentionally narrow:
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml             # PR + push-to-main: gofmt, vet, build, test, goreleaser check
-│   │   └── release.yml        # tag-driven goreleaser + npm + homebrew
+│   │   └── release.yml        # VERSION-driven release: gate → tag → goreleaser + npm + homebrew
 │   ├── dependabot.yml         # security-only updates (routine version bumps disabled)
 │   └── release.yml            # auto release-notes categorization by label
 ├── .goreleaser.yaml           # darwin/linux × amd64/arm64 + homebrew tap
@@ -189,26 +189,32 @@ outside the public tree).
 
 ## Deploy
 
-Releases are tag-driven. Push a semver tag matching
-`v[0-9]+.[0-9]+.[0-9]+*` and `.github/workflows/release.yml`:
+Releases are **VERSION-driven**, not tag-driven. Bump the `VERSION` file (and
+regenerate the skill) in a release PR; on merge to `main`,
+`.github/workflows/release.yml` runs. A `gate` job derives `v<VERSION>` and skips
+if that tag already exists; otherwise the `goreleaser` job creates and pushes the
+tag and releases in the same run (the tag is an artifact of the release, not its
+trigger — no PAT needed). The release:
 
 1. Runs `goreleaser release --clean` on ubuntu-latest, producing
    `slk_<os>_<arch>.tar.gz` for `darwin/linux × amd64/arm64` plus
    `checksums.txt`.
 2. Creates the GitHub Release with the artifacts (`release.prerelease:
-   auto` marks tags containing `-`, e.g. `v0.1.0-rc1`, as prereleases).
+   auto` marks versions containing `-`, e.g. `v0.1.0-rc1`, as prereleases).
+   Release notes use goreleaser `changelog: use: github-native`, so they follow
+   `.github/release.yml`'s PR-label categories.
 3. Generates SLSA build provenance attestations via
    `actions/attest-build-provenance@v4`.
 4. Pushes a Homebrew formula update to `howar31/homebrew-tap` (uses the
    `HOMEBREW_TAP_TOKEN` PAT). Prereleases skip the formula push via
    goreleaser's `brews.skip_upload: auto` (the npm-only prerelease guard
    in `release.yml` does not cover brews).
-5. For non-prerelease tags, runs a `publish-npm` job that bumps
-   `npm/package.json`'s version to match the tag and publishes
+5. For non-prerelease versions, runs a `publish-npm` job that bumps
+   `npm/package.json`'s version to match `VERSION` and publishes
    `@howar31/slk` (uses `NPM_TOKEN`). Prereleases skip the npm publish.
 
 Both release secrets expire and must be rotated, or the corresponding
-step fails on the next tag:
+step fails on the next release:
 
 - `NPM_TOKEN` — npm granular token, **max 90-day** expiry (npm's hard
   limit). Regenerate at npmjs.com (Read/write on `@howar31`) and

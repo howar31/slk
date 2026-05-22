@@ -13,7 +13,7 @@ This file is index-only; do not duplicate SPEC.md content here.
 go build -o slk ./cmd/slk                   # version comes from the committed VERSION file
 go test ./...                               # uncached → prefix with go clean -testcache
 go test ./internal/commands/ -run TestX -v  # focused
-git tag v0.1.0 && git push origin v0.1.0    # tag-driven release via GHA
+# release: bump VERSION + `go run ./cmd/slk generate-skill` in a PR; merge to main → GHA auto-tags v<VERSION> & releases
 goreleaser release --snapshot --clean       # local dry-run only
 ```
 
@@ -31,7 +31,7 @@ goreleaser release --snapshot --clean       # local dry-run only
 - Test fixtures and example identifiers use the scrubbed convention: `Alice` / `Bob` / `C0123456789` / `U0123456789` / `F01234567`. Do NOT introduce real names or real channel/user IDs into committed code or docs.
 - When dispatching subagents for code work, explicitly tell them: "Do NOT run any commit-helper or documentation skill. Do NOT create SPEC.md, CLAUDE.md, or top-level README.md."
 - Tokens live in `~/.config/slk/config.toml` (mode 0600); sensitive fields are encrypted at rest (AES-256-GCM), key in OS keyring or `~/.config/slk/.encryption_key` per `SLK_KEYRING_BACKEND` (`auto` default). Never print or log token strings or the encryption key. Details in SPEC.md.
-- Release is GHA-on-tag only (`.github/workflows/release.yml`). Do NOT run `goreleaser release` (without `--snapshot`) locally against the real `origin` remote — it would create a partial release and push a partial Homebrew formula.
+- Release is VERSION-driven (`.github/workflows/release.yml`): changing `VERSION` on `main` triggers it; a gate derives `v<VERSION>`, skips if the tag exists, else auto-creates the tag and releases (goreleaser + npm + homebrew). The tag is an artifact, not the trigger; no manual `git tag`. Do NOT run `goreleaser release` (without `--snapshot`) locally against the real `origin` remote — it would create a partial release and push a partial Homebrew formula.
 
 ## Slack-side traps (documented in README + SPEC)
 - `chat.deleteScheduledMessage` may return ok=true for schedules within ~5 min of `post_at` yet still fire.
