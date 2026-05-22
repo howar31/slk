@@ -24,10 +24,10 @@ func Convert(htmlStr string) (string, map[string]string, error) {
 
 // listState carries list context through recursive descent.
 type listState struct {
-	depth    int    // current nesting depth (0 = not in list)
-	style    string // "bullet", "ordered", "checklist"
-	counter  int    // for ordered lists
-	prevWasList bool // true when the previous sibling element was an <li>
+	depth       int    // current nesting depth (0 = not in list)
+	style       string // "bullet", "ordered", "checklist"
+	counter     int    // for ordered lists
+	prevWasList bool   // true when the previous sibling element was an <li>
 }
 
 type converter struct {
