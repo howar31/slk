@@ -200,8 +200,36 @@ slk auth set-token --profile work --workspace acme --user xoxp-...
 slk auth login --profile work --client-id ... --client-secret ...
 ```
 
-Tokens land in `~/.config/slk/config.toml` (mode `0600`). `slk` never prints token contents;
-`slk auth status` shows presence booleans only.
+Tokens land in `~/.config/slk/config.toml` (mode `0600`) and are encrypted at rest (see
+[Credential storage](#credential-storage)). `slk` never prints token contents; `slk auth
+status` shows presence booleans only.
+
+### Credential storage
+
+The `user_token`, `bot_token`, and `client_secret` fields are encrypted at rest with
+AES-256-GCM. Tokens you add with `slk auth set-token` or `slk auth login` are encrypted on
+write; an existing plaintext value (for example one you hand-edited into the file) keeps
+working and is encrypted the next time `slk` writes the config — no re-authentication is ever
+required.
+
+The 32-byte encryption key is held in one of two backends, selected by the
+`SLK_KEYRING_BACKEND` environment variable:
+
+- `auto` (default) — use the OS keyring if one is available, otherwise fall back to a key
+  file. This keeps `slk` usable in headless / CI / agent environments with no interactive
+  keyring.
+- `keyring` — always use the OS keyring (macOS Keychain, Linux Secret Service, Windows
+  Credential Manager). Strongest protection; may prompt to unlock.
+- `file` — store the key in `~/.config/slk/.encryption_key` (mode `0600`).
+
+The backend actually used is recorded in the config so reads stay deterministic. `slk auth
+status` shows the backend and whether decryption is healthy, never any secret.
+
+**What this protects against:** accidental disclosure — a token no longer sits in the config
+file as readable text, so it will not leak through a casual `cat`, screen-sharing, dotfile
+sync, or backups. The `file` backend keeps the key next to the config, so it is **not** a
+defense against someone who can already read your `~/.config/slk/` directory; for real
+local-attacker protection use the `keyring` backend.
 
 ### Precedence
 
@@ -378,6 +406,7 @@ slk api canvases.sections.lookup \
 | `SLK_TOKEN` | Token override. Highest precedence — bypasses the config file entirely. |
 | `SLK_PROFILE` | Active profile name. Used when `--profile` is not passed. |
 | `SLK_CONFIG` | Config file path override. Default: `~/.config/slk/config.toml`. |
+| `SLK_KEYRING_BACKEND` | At-rest encryption-key backend: `auto` (default), `keyring`, or `file`. See [Credential storage](#credential-storage). |
 
 ## Exit codes
 

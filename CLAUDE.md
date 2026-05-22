@@ -30,7 +30,7 @@ goreleaser release --snapshot --clean       # local dry-run only
 - `main` is the public branch (`github.com/howar31/slk`). Do not push without explicit approval.
 - Test fixtures and example identifiers use the scrubbed convention: `Alice` / `Bob` / `C0123456789` / `U0123456789` / `F01234567`. Do NOT introduce real names or real channel/user IDs into committed code or docs.
 - When dispatching subagents for code work, explicitly tell them: "Do NOT run any commit-helper or documentation skill. Do NOT create SPEC.md, CLAUDE.md, or top-level README.md."
-- Tokens live in `~/.config/slk/config.toml` (mode 0600). Never print or log token strings.
+- Tokens live in `~/.config/slk/config.toml` (mode 0600); sensitive fields are encrypted at rest (AES-256-GCM), key in OS keyring or `~/.config/slk/.encryption_key` per `SLK_KEYRING_BACKEND` (`auto` default). Never print or log token strings or the encryption key. Details in SPEC.md.
 - Release is GHA-on-tag only (`.github/workflows/release.yml`). Do NOT run `goreleaser release` (without `--snapshot`) locally against the real `origin` remote — it would create a partial release and push a partial Homebrew formula.
 
 ## Slack-side traps (documented in README + SPEC)
