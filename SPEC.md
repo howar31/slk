@@ -115,8 +115,10 @@ External dependencies are intentionally narrow:
 │   ├── specs/2026-05-19-slack-cli-design.md
 │   └── plans/2026-05-19-slk-slack-cli.md
 ├── .github/
-│   ├── workflows/release.yml  # tag-driven goreleaser + npm + homebrew
-│   ├── dependabot.yml         # weekly gomod + github-actions updates
+│   ├── workflows/
+│   │   ├── ci.yml             # PR + push-to-main: gofmt, vet, build, test, goreleaser check
+│   │   └── release.yml        # tag-driven goreleaser + npm + homebrew
+│   ├── dependabot.yml         # security-only updates (routine version bumps disabled)
 │   └── release.yml            # auto release-notes categorization by label
 ├── .goreleaser.yaml           # darwin/linux × amd64/arm64 + homebrew tap
 ├── go.mod / go.sum
@@ -153,6 +155,10 @@ External dependencies are intentionally narrow:
 - Build: `go build -ldflags "-X main.version=<v>" -o slk ./cmd/slk`
 - Test: `go test ./...` (no external services touched)
 - Forced refresh: `go clean -testcache && go test ./...`
+- CI (`.github/workflows/ci.yml`): on every PR and push to `main` (code
+  paths only — `**.md`, `docs/**`, `LICENSE`, `.gitignore` are ignored),
+  GitHub Actions runs a gofmt check, `go vet`, `go build ./...`,
+  `go test ./...`, and `goreleaser check` on Go 1.25.
 - Coverage snapshot: `go test ./... -coverpkg=./...
   -coverprofile=/tmp/slk.cov && go tool cover -func=/tmp/slk.cov`
 
@@ -191,9 +197,11 @@ Releases are tag-driven. Push a semver tag matching
 2. Creates the GitHub Release with the artifacts (`release.prerelease:
    auto` marks tags containing `-`, e.g. `v0.1.0-rc1`, as prereleases).
 3. Generates SLSA build provenance attestations via
-   `actions/attest-build-provenance@v3`.
+   `actions/attest-build-provenance@v4`.
 4. Pushes a Homebrew formula update to `howar31/homebrew-tap` (uses the
-   `HOMEBREW_TAP_TOKEN` PAT).
+   `HOMEBREW_TAP_TOKEN` PAT). Prereleases skip the formula push via
+   goreleaser's `brews.skip_upload: auto` (the npm-only prerelease guard
+   in `release.yml` does not cover brews).
 5. For non-prerelease tags, runs a `publish-npm` job that bumps
    `npm/package.json`'s version to match the tag and publishes
    `@howar31/slk` (uses `NPM_TOKEN`). Prereleases skip the npm publish.
@@ -209,9 +217,13 @@ step fails on the next tag:
 
 Dependency and release-notes automation:
 
-- `.github/dependabot.yml` opens weekly PRs for `gomod` and
-  `github-actions` (limit 5 each, `chore`-prefixed commits). Repo-side
-  Dependabot alerts and automated security fixes are enabled.
+- `.github/dependabot.yml` disables routine version-bump PRs
+  (`open-pull-requests-limit: 0` for both `gomod` and `github-actions`);
+  the ecosystem blocks are kept only so repository-level Dependabot
+  security PRs inherit the `chore`-scope commit formatting. Dependabot
+  alerts and automated security fixes are enabled at the repo level, so
+  PRs for vulnerable dependencies are still opened; non-security bumps
+  are made manually.
 - `.github/release.yml` categorizes the auto-generated GitHub Release
   notes by PR label (Features / Fixes / Documentation / Dependencies /
   Maintenance / Other).
@@ -267,7 +279,6 @@ Runtime state:
 - **`channel invite` cannot positively-test against the operator**:
   the maintainer is auto-member as creator; `cant_invite_self` is the
   only path that fits the privacy constraint.
-- **No CI**: tests run locally.
 - **Cobra usage errors map to exit 1**: spec calls for exit 2; the
   detection path is fiddly and deferred to v1.2.
 - **`context.Context` is not threaded** through `api.Client.Call` /
