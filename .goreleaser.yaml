@@ -9,13 +9,15 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w
 archives:
   - formats: [tar.gz]
     name_template: 'slk_{{ .Os }}_{{ .Arch }}'
 checksum:
   name_template: 'checksums.txt'
   algorithm: sha256
+changelog:
+  use: github-native
 release:
   prerelease: auto
 brews:

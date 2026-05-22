@@ -47,3 +47,21 @@ jobs:
           distribution: goreleaser
           version: '~> v2'
           args: check
+
+  skill:
+    name: Verify skill is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          check-latest: true
+      - name: Regenerate skill
+        run: go run ./cmd/slk generate-skill --output skills/slk/SKILL.md
+      - name: Fail on drift
+        run: |
+          if ! git diff --exit-code skills/; then
+            echo "::error::skills/slk/SKILL.md is out of date — run 'go run ./cmd/slk generate-skill' and commit."
+            exit 1
+          fi

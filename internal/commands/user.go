@@ -46,8 +46,9 @@ func newUserListCommand(g *GlobalFlags) *cobra.Command {
 	var cursor string
 	var includeBots, includeDeactivated bool
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List workspace users",
+		Use:         "list",
+		Short:       "List workspace users",
+		Annotations: map[string]string{"slackMethod": "users.list"},
 		Long: `List workspace users.
 
 By default the output excludes bot users and deactivated accounts, which are
@@ -152,8 +153,9 @@ func fetchUsersWith(client *api.Client, opts userListOpts) ([]searchHit, error) 
 func newUserInfoCommand(g *GlobalFlags) *cobra.Command {
 	var userID string
 	cmd := &cobra.Command{
-		Use:   "info",
-		Short: "Show one user's profile",
+		Use:         "info",
+		Short:       "Show one user's profile",
+		Annotations: map[string]string{"slackMethod": "users.info"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(g)
 			if err != nil {
@@ -190,8 +192,9 @@ func newUserProfileCommand(g *GlobalFlags) *cobra.Command {
 	var userID string
 	var includeLocale bool
 	cmd := &cobra.Command{
-		Use:   "profile",
-		Short: "Show a user's profile fields",
+		Use:         "profile",
+		Short:       "Show a user's profile fields",
+		Annotations: map[string]string{"slackMethod": "users.profile.get"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(g)
 			if err != nil {

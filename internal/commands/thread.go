@@ -18,8 +18,9 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 	var channel, thread, oldest, latest, cursor string
 	var limit int
 	cmd := &cobra.Command{
-		Use:   "read",
-		Short: "Read replies in a thread",
+		Use:         "read",
+		Short:       "Read replies in a thread",
+		Annotations: map[string]string{"slackMethod": "conversations.replies"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(g)
 			if err != nil {
@@ -77,6 +78,10 @@ func newThreadReplyCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reply",
 		Short: "Reply within a thread",
+		Annotations: map[string]string{
+			"slackMethod": "chat.postMessage",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
 			if err != nil {

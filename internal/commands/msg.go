@@ -81,8 +81,9 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 	var channel, oldest, latest, cursor string
 	var limit int
 	cmd := &cobra.Command{
-		Use:   "read",
-		Short: "Read messages from a channel or DM",
+		Use:         "read",
+		Short:       "Read messages from a channel or DM",
+		Annotations: map[string]string{"slackMethod": "conversations.history"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(g)
 			if err != nil {
@@ -143,6 +144,10 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "send",
 		Short: "Send a message to a channel or DM",
+		Annotations: map[string]string{
+			"slackMethod": "chat.postMessage",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
 			if err != nil {
@@ -195,6 +200,10 @@ func newMsgWriteCommand(g *GlobalFlags, use, method string, flags []string) *cob
 	cmd := &cobra.Command{
 		Use:   use,
 		Short: use + " a message",
+		Annotations: map[string]string{
+			"slackMethod": method,
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{}
 			for _, f := range flags {
@@ -234,6 +243,10 @@ func newMsgUpdateCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "update a message",
+		Annotations: map[string]string{
+			"slackMethod": "chat.update",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
 			if err != nil {
@@ -274,6 +287,10 @@ func newMsgReactCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "react",
 		Short: "Add an emoji reaction to a message",
+		Annotations: map[string]string{
+			"slackMethod": "reactions.add",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "timestamp": ts, "name": emoji}
 			if g.DryRun {
@@ -349,6 +366,11 @@ func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "schedule",
 		Short: "Schedule a message for a future time",
+		Annotations: map[string]string{
+			"slackMethod": "chat.scheduleMessage",
+			"write":       "true",
+		},
+		Long: "Schedule a message. chat.deleteScheduledMessage may return ok=true for schedules within ~5 minutes of post_at yet the message still posts.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
 			if err != nil {
@@ -413,6 +435,10 @@ func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "draft",
 		Short: "Create a message draft via drafts.create",
+		Annotations: map[string]string{
+			"slackMethod": "drafts.create",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
 			if err != nil {

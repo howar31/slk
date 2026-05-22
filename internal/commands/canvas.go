@@ -40,6 +40,10 @@ func newCanvasCreateCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a standalone canvas",
+		Annotations: map[string]string{
+			"slackMethod": "canvases.create",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(markdown, markdownFile, "--markdown", "--markdown-file")
 			if err != nil {
@@ -84,8 +88,9 @@ func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 	var canvasID string
 	var withSections bool
 	cmd := &cobra.Command{
-		Use:   "read",
-		Short: "Read a canvas as markdown (HTML-converted)",
+		Use:         "read",
+		Short:       "Read a canvas as markdown (HTML-converted)",
+		Annotations: map[string]string{"slackMethod": "files.info"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(g)
 			if err != nil {
@@ -162,6 +167,10 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update a canvas's content",
+		Annotations: map[string]string{
+			"slackMethod": "canvases.edit",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(markdown, markdownFile, "--markdown", "--markdown-file")
 			if err != nil {
@@ -239,8 +248,9 @@ func newCanvasListCommand(g *GlobalFlags) *cobra.Command {
 	var userQuery string
 	var limit int
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List canvases via search.files",
+		Use:         "list",
+		Short:       "List canvases via search.files",
+		Annotations: map[string]string{"slackMethod": "search.files"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(g)
 			if err != nil {
