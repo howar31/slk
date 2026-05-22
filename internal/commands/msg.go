@@ -370,6 +370,7 @@ func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
 			"slackMethod": "chat.scheduleMessage",
 			"write":       "true",
 		},
+		Long: "Schedule a message. chat.deleteScheduledMessage may return ok=true for schedules within ~5 minutes of post_at yet the message still posts.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
 			if err != nil {

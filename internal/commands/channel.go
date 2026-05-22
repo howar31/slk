@@ -154,6 +154,7 @@ func newChannelInviteCommand(g *GlobalFlags) *cobra.Command {
 			"slackMethod": "conversations.invite",
 			"write":       "true",
 		},
+		Long: "Invite users to a channel. Cannot invite a channel's creator or an existing member (Slack returns cant_invite_self / already_in_channel).",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "users": users}
 			if g.DryRun {

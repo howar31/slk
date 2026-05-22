@@ -76,6 +76,7 @@ func newListCreateCommand(g *GlobalFlags) *cobra.Command {
 			"slackMethod": "slackLists.create",
 			"write":       "true",
 		},
+		Long: "Create a Slack List. Lists cannot be deleted via the public API (slackLists.delete does not exist) — remove them in the Slack UI.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"name": title}
 			if g.DryRun {

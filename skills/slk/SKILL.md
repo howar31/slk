@@ -307,6 +307,8 @@ slk channel invite [flags]
 | `--channel` | ✓ | — | channel ID |
 | `--users` | ✓ | — | comma-separated user IDs |
 
+**Tips:** Invite users to a channel. Cannot invite a channel's creator or an existing member (Slack returns cant_invite_self / already_in_channel).
+
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
 
@@ -384,6 +386,8 @@ slk list create [flags]
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
 | `--title` | ✓ | — | list title |
+
+**Tips:** Create a Slack List. Lists cannot be deleted via the public API (slackLists.delete does not exist) — remove them in the Slack UI.
 
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
@@ -527,6 +531,8 @@ slk msg schedule [flags]
 | `--text` | — | — | message text |
 | `--text-file` | — | — | path to text file (use - for stdin) |
 | `--thread` | — | — | optional thread parent ts |
+
+**Tips:** Schedule a message. chat.deleteScheduledMessage may return ok=true for schedules within ~5 minutes of post_at yet the message still posts.
 
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
