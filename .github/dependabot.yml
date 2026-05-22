@@ -1,21 +1,28 @@
 version: 2
+# Version updates are intentionally disabled (open-pull-requests-limit: 0):
+# Dependabot no longer opens routine version-bump PRs. Security updates are
+# unaffected -- they have a separate internal limit and are governed at the
+# repository level (Dependabot security updates / automated security fixes are
+# enabled), so PRs for vulnerable dependencies keep being opened. The ecosystem
+# blocks are kept so those security PRs inherit the commit-message formatting
+# below. Bump non-security versions manually when touching the relevant code.
 updates:
-  # Go module dependencies
+  # Go module dependencies (security updates only)
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "chore"
       include: "scope"
 
-  # GitHub Actions used by the release pipeline
+  # GitHub Actions used by the release pipeline (security updates only)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "chore"
       include: "scope"
