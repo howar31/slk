@@ -1,30 +1,63 @@
 name: Release
 
+# Release is driven by the committed VERSION file (single source of truth), not
+# by manually pushing a tag. When VERSION changes on main, the gate job decides
+# whether that version still needs releasing; if so, the goreleaser job creates
+# the matching `v<VERSION>` tag and runs the release in the same run. The tag is
+# an artifact of the release, not its trigger.
 on:
   push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+*'
+    branches: [main]
+    paths:
+      - 'VERSION'
 
 permissions:
   contents: write
   id-token: write
   attestations: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: check
+        name: Decide whether the current VERSION needs releasing
+        run: |
+          version="$(cat VERSION)"
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists — nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag ${tag} does not exist — releasing ${version}."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   goreleaser:
+    needs: gate
+    if: ${{ needs.gate.outputs.release == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Verify tag matches VERSION
+      - name: Create and push the release tag
         run: |
-          file_version="$(cat VERSION)"
-          tag_version="${GITHUB_REF_NAME#v}"
-          if [ "$file_version" != "$tag_version" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match VERSION ($file_version)"
-            exit 1
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ needs.gate.outputs.tag }}"
+          git push origin "${{ needs.gate.outputs.tag }}"
       - uses: actions/setup-go@v6
         with:
           go-version: '1.25'
@@ -37,13 +70,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ needs.gate.outputs.tag }}
       - uses: actions/attest-build-provenance@v4
         with:
           subject-path: 'dist/*.tar.gz'
 
   publish-npm:
-    needs: goreleaser
-    if: ${{ !contains(github.ref_name, '-') }}
+    needs: [gate, goreleaser]
+    if: ${{ needs.gate.outputs.release == 'true' && !contains(needs.gate.outputs.version, '-') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -51,11 +85,9 @@ jobs:
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-      - name: Sync npm version with git tag
+      - name: Sync npm version with VERSION
         working-directory: npm
-        run: |
-          VER="${GITHUB_REF_NAME#v}"
-          npm version "$VER" --no-git-tag-version
+        run: npm version "${{ needs.gate.outputs.version }}" --no-git-tag-version
       - name: Publish to npm
         working-directory: npm
         env:
@@ -64,7 +96,7 @@ jobs:
       - name: Smoke test packed package
         working-directory: npm
         run: |
-          VER="${GITHUB_REF_NAME#v}"
+          VER="${{ needs.gate.outputs.version }}"
           # Install the locally packed wrapper rather than pulling the just-
           # published version from the npm registry. Newly published scoped
           # versions can take several minutes to become resolvable (ETARGET),

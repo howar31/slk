@@ -16,6 +16,8 @@ archives:
 checksum:
   name_template: 'checksums.txt'
   algorithm: sha256
+changelog:
+  use: github-native
 release:
   prerelease: auto
 brews:
