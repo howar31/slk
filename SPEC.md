@@ -110,7 +110,8 @@ External dependencies are intentionally narrow:
 │   │   ├── convert.go
 │   │   └── testdata/          # canvas_fixture.{html,md} golden file
 │   └── resolve/               # ID→name cache (~/.config/slk/cache)
-├── skill/SKILL.md             # agent-facing usage skill
+├── skills/slk/SKILL.md        # generated agent skill (slk generate-skill)
+├── internal/skillgen/         # SKILL.md generator (template + renderer)
 ├── docs/superpowers/          # design spec + implementation plan
 │   ├── specs/2026-05-19-slack-cli-design.md
 │   └── plans/2026-05-19-slk-slack-cli.md
