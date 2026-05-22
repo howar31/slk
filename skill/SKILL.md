@@ -28,7 +28,17 @@ metadata:
 `slk <group> <verb> [flags]`
 
 Groups: `auth`, `msg`, `thread`, `search`, `canvas`, `list`, `channel`, `user`,
-`api`.
+`api`, `version`.
+
+For the authoritative command set, ask the binary — its help is auto-generated
+from the registered commands and never drifts from this doc:
+
+- `slk --help` — all groups.
+- `slk <group> --help` — a group's verbs (e.g. `slk msg --help`).
+- `slk <group> <verb> --help` — a verb's flags (e.g. `slk msg send --help`).
+
+The examples below are only the common subset; consult `--help` for anything
+not shown here.
 
 ## Global flags
 
@@ -53,6 +63,10 @@ slk list create --title "Backlog"
 slk channel invite --channel C123 --users U1,U2
 slk api <method> --params '{"k":"v"}'   # escape hatch for any method
 ```
+
+`slk api` reaches any Web API method. `--params` is a flat JSON object sent as
+form fields, so nested values must be pre-serialized JSON strings; use `--json`
+to send a raw JSON request body instead.
 
 ## Multi-line content
 
@@ -79,5 +93,5 @@ opens the channel where the draft is attached.
 
 ## Exit codes
 
-`0` ok · `2` bad args · `3` auth error · `4` not found · `5` rate limited ·
-`1` other.
+`0` ok · `3` auth error · `4` not found · `5` rate limited · `1` other (includes
+bad args / usage errors).
