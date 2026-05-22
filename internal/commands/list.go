@@ -72,6 +72,10 @@ func newListCreateCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new List",
+		Annotations: map[string]string{
+			"slackMethod": "slackLists.create",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"name": title}
 			if g.DryRun {
@@ -112,8 +116,9 @@ func parseListCreateID(raw []byte) string {
 func newListReadCommand(g *GlobalFlags) *cobra.Command {
 	var listID string
 	cmd := &cobra.Command{
-		Use:   "read",
-		Short: "Read items in a List",
+		Use:         "read",
+		Short:       "Read items in a List",
+		Annotations: map[string]string{"slackMethod": "slackLists.items.list"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(g)
 			if err != nil {
@@ -145,6 +150,10 @@ func newListAddItemCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add-item",
 		Short: "Add an item to a List",
+		Annotations: map[string]string{
+			"slackMethod": "slackLists.items.create",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"list_id": listID, "initial_fields": fieldsJSON}
 			if g.DryRun {
@@ -179,6 +188,10 @@ func newListUpdateItemCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update-item",
 		Short: "Update an item in a List",
+		Annotations: map[string]string{
+			"slackMethod": "slackLists.items.update",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cells, err := injectRowID(fieldsJSON, rowID)
 			if err != nil {

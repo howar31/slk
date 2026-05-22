@@ -37,8 +37,9 @@ func newSearchMessagesCommand(g *GlobalFlags) *cobra.Command {
 	var query string
 	var public bool
 	cmd := &cobra.Command{
-		Use:   "messages",
-		Short: "Search messages (requires a user token)",
+		Use:         "messages",
+		Short:       "Search messages (requires a user token)",
+		Annotations: map[string]string{"slackMethod": "search.messages"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(g)
 			if err != nil {
@@ -86,8 +87,9 @@ func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
 	var includeArchived bool
 	var channelTypes string
 	cmd := &cobra.Command{
-		Use:   "channels",
-		Short: "List/search channels (client-side filter)",
+		Use:         "channels",
+		Short:       "List/search channels (client-side filter)",
+		Annotations: map[string]string{"slackMethod": "conversations.list"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(g)
@@ -147,8 +149,9 @@ func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
 func newSearchUsersCommand(g *GlobalFlags) *cobra.Command {
 	var query string
 	cmd := &cobra.Command{
-		Use:   "users",
-		Short: "List/search workspace users (client-side filter)",
+		Use:         "users",
+		Short:       "List/search workspace users (client-side filter)",
+		Annotations: map[string]string{"slackMethod": "users.list"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(g)

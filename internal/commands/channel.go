@@ -25,8 +25,9 @@ func newChannelListCommand(g *GlobalFlags) *cobra.Command {
 	var limit int
 	var cursor, types string
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List channels",
+		Use:         "list",
+		Short:       "List channels",
+		Annotations: map[string]string{"slackMethod": "conversations.list"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(g)
@@ -67,6 +68,10 @@ func newChannelCreateCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.create",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"name": name}
 			if private {
@@ -109,6 +114,10 @@ func newChannelArchiveCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "archive",
 		Short: "Archive a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.archive",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
 			if g.DryRun {
@@ -141,6 +150,10 @@ func newChannelInviteCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "invite",
 		Short: "Invite users to a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.invite",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "users": users}
 			if g.DryRun {
@@ -175,6 +188,10 @@ func newChannelTopicCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "topic",
 		Short: "Set a channel's topic",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.setTopic",
+			"write":       "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "topic": topic}
 			if g.DryRun {
