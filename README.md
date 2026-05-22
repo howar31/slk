@@ -12,7 +12,7 @@
 
 [![Last commit](https://img.shields.io/github/last-commit/howar31/slk)](https://github.com/howar31/slk/commits/main)
 [![Open issues](https://img.shields.io/github/issues/howar31/slk)](https://github.com/howar31/slk/issues)
-[![npm downloads](https://img.shields.io/npm/dm/@howar31/slk)](https://www.npmjs.com/package/@howar31/slk)
+[![Downloads](https://img.shields.io/github/downloads/howar31/slk/total)](https://github.com/howar31/slk/releases)
 [![Sponsor on Ko-fi](https://img.shields.io/badge/sponsor-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/howar31)
 
 [![Stars](https://img.shields.io/github/stars/howar31/slk?style=social)](https://github.com/howar31/slk/stargazers)
