@@ -29,6 +29,7 @@ func NewRootCommand(version string) *cobra.Command {
 		newChannelCommand(g),
 		newUserCommand(g),
 		newVersionCommand(g, version),
+		newGenerateSkillCommand(version),
 	)
 	return root
 }
