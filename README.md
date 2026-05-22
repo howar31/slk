@@ -2,6 +2,7 @@
 
 > Agent-facing Slack CLI — token-efficient read, send, and manage for AI agents.
 
+[![CI](https://img.shields.io/github/actions/workflow/status/howar31/slk/ci.yml?branch=main&label=CI)](https://github.com/howar31/slk/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/howar31/slk)](https://github.com/howar31/slk/releases)
 [![npm version](https://img.shields.io/npm/v/@howar31/slk)](https://www.npmjs.com/package/@howar31/slk)
