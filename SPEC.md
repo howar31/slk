@@ -48,6 +48,14 @@ returned quip HTML to Markdown via `internal/quip` — including
 non-standard `<lnk>`, code blocks (`class="prettyprint"`), checklists
 (`data-section-style='7'`), and table-cell section IDs.
 
+Update checking is special too: `slk version --check` does not touch
+Slack and needs no token. It performs a single read-only GET to the
+GitHub Releases API (`/repos/howar31/slk/releases/latest`, with a
+`User-Agent` header), compares the parsed `tag_name` against the build
+version, and reports whether a newer release exists. It never downloads
+or replaces the binary. Plain `slk version` / `slk --version` stay
+fully offline.
+
 External dependencies are intentionally narrow:
 
 - `github.com/spf13/cobra` (+ `pflag`) for the command tree
@@ -87,7 +95,8 @@ External dependencies are intentionally narrow:
 │   │   ├── list.go            # Slack Lists: create / read / add-item /
 │   │   │                      # update-item; injectRowID helper
 │   │   ├── user.go            # info / profile / list (default-filter)
-│   │   └── search.go          # messages / channels / users
+│   │   ├── search.go          # messages / channels / users
+│   │   └── version.go         # version + --check GitHub-release probe
 │   ├── output/                # concise|json|jsonl|table renderers
 │   ├── quip/                  # canvas HTML→Markdown converter
 │   │   ├── convert.go
@@ -281,3 +290,12 @@ Runtime state:
 - **`--raw` is the universal escape hatch on every API-touching verb.**
   Read verbs already honored it; write verbs now do too. This keeps the
   contract "concise by default, raw when asked" universal.
+- **Update check is read-only and advisory.** `slk version --check`
+  reports whether a newer GitHub release exists and prints the upgrade
+  command, but never self-updates: homebrew-core rejects self-upgrading
+  tools, and upgrades stay the package manager's job. The check is
+  best-effort — a network or rate-limit failure prints the current
+  version with a note and still exits `0`, so it never breaks a script;
+  agents read the `update_available` / `checked` JSON fields rather than
+  the exit code. Plain `version` performs no network I/O, preserving the
+  offline, low-latency default.

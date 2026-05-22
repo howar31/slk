@@ -32,6 +32,7 @@ exposes `--raw` when a caller wants full API responses.
 - [Agent setup](#agent-setup)
 - [Usage](#usage)
   - [Global flags](#global-flags)
+  - [Checking for updates](#checking-for-updates)
   - [Multi-line content](#multi-line-content)
   - [Drafts](#drafts)
   - [Slack Lists item shape](#slack-lists-item-shape)
@@ -255,6 +256,8 @@ slk canvas read   --id F0123456789
 slk list create   --title "Backlog"
 slk channel archive --channel C0123456789
 slk api conversations.info --params '{"channel":"C0123456789"}'
+slk version                # print the running version (offline)
+slk version --check        # check GitHub Releases for a newer version (read-only)
 ```
 
 ### Global flags
@@ -267,6 +270,28 @@ slk api conversations.info --params '{"channel":"C0123456789"}'
 | `--raw` | Return the raw Slack API response, skipping concise rendering. |
 | `--dry-run` | Validate locally and print what would be sent; do not call the API. |
 | `--no-resolve` | Skip ID-to-name resolution (faster, less readable). |
+
+### Checking for updates
+
+```bash
+slk version          # print the running version (fully offline)
+slk version --check  # ask GitHub Releases whether a newer version exists
+```
+
+`slk version --check` makes a single read-only request to the GitHub Releases
+API and reports whether a newer version is available, plus the command to
+upgrade. It **never downloads or replaces the binary** — upgrading stays your
+package manager's job (`brew upgrade slk`, `npm i -g @howar31/slk@latest`, or a
+fresh download from the [Releases](https://github.com/howar31/slk/releases)
+page).
+
+The check is best-effort: if GitHub is unreachable or rate-limited, slk prints
+your current version with a note and still exits `0`. Pass `--format json` for
+machine-readable output — agents can read the `update_available` and `checked`
+fields. A locally built binary reports as a development build and never claims
+an update is available.
+
+Plain `slk version` and `slk --version` perform no network I/O.
 
 ### Multi-line content
 

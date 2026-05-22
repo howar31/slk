@@ -13,6 +13,10 @@ func NewRootCommand(version string) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	// Keep `slk --version` and the `version` subcommand byte-for-byte
+	// consistent ("slk <version>"); Cobra's default template prints
+	// "slk version <version>".
+	root.SetVersionTemplate("slk {{.Version}}\n")
 	bindGlobalFlags(root, g)
 	root.AddCommand(
 		newAPICommand(g),
@@ -24,6 +28,7 @@ func NewRootCommand(version string) *cobra.Command {
 		newListCommand(g),
 		newChannelCommand(g),
 		newUserCommand(g),
+		newVersionCommand(g, version),
 	)
 	return root
 }
