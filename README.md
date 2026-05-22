@@ -243,14 +243,20 @@ Active credential resolution, highest precedence first:
 
 ## Agent setup
 
-### Claude Code
+### Claude Code, Cursor, and other skill-aware agents
+
+```bash
+npx skills add https://github.com/howar31/slk
+```
+
+This installs `skills/slk/SKILL.md` into your agent's skills directory (e.g.
+`~/.claude/skills/`). Claude Code activates the skill automatically when a task
+mentions Slack. Manual fallback:
 
 ```bash
 mkdir -p ~/.claude/skills/slk
-cp ./skill/SKILL.md ~/.claude/skills/slk/SKILL.md
+cp ./skills/slk/SKILL.md ~/.claude/skills/slk/SKILL.md
 ```
-
-Claude Code activates the skill automatically when a task mentions Slack.
 
 ### Gemini CLI
 
@@ -262,14 +268,15 @@ Requires `slk` on your `$PATH` (install via Homebrew or npm first).
 
 ### OpenClaw
 
-OpenClaw reads `skill/SKILL.md`'s frontmatter. If the `slk` binary is missing, OpenClaw
+OpenClaw reads `skills/slk/SKILL.md`'s frontmatter. Symlink it to stay in sync with the repo:
+`ln -s $(pwd)/skills/slk ~/.openclaw/skills/`. If the `slk` binary is missing, OpenClaw
 auto-installs it from one of the `install:` specs in the skill metadata (npm `@howar31/slk`,
 the Homebrew tap, or `go install`).
 
 ### Cursor / aider / others
 
 Either reference `slk --help` from your agent's instruction file, or paste the contents of
-[`skill/SKILL.md`](skill/SKILL.md) into the agent's persistent rules file (e.g.,
+[`skills/slk/SKILL.md`](skills/slk/SKILL.md) into the agent's persistent rules file (e.g.,
 `.cursorrules`, `GEMINI.md`).
 
 ## Usage
