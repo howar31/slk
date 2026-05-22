@@ -10,7 +10,7 @@ This file is index-only; do not duplicate SPEC.md content here.
 
 ## Run / build
 ```bash
-go build -ldflags "-X main.version=0.1.0" -o slk ./cmd/slk
+go build -o slk ./cmd/slk                   # version comes from the committed VERSION file
 go test ./...                               # uncached → prefix with go clean -testcache
 go test ./internal/commands/ -run TestX -v  # focused
 git tag v0.1.0 && git push origin v0.1.0    # tag-driven release via GHA
