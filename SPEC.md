@@ -183,6 +183,12 @@ External dependencies are intentionally narrow:
   `Annotations["slackMethod"]` and `Annotations["write"]` drive the
   generated Slack-method line and the write `CAUTION`; CI fails if the
   committed skill drifts from the generator.
+- **README scope**: the README is human onboarding plus knowledge `slk
+  --help` cannot convey (usage traps, data shapes, behavior notes). The
+  complete, in-sync command reference is `slk --help` and the generated
+  `SKILL.md`; do not reintroduce a per-command example list or a
+  global-flags table in the README — it would be a partial, drift-prone
+  mirror of the command tree, contradicting the generated-skill SSOT.
 
 ## Verification
 
@@ -309,6 +315,17 @@ Runtime state:
   the open-source binary requires public OAuth scopes only; this rules
   out `drafts.list`/`drafts.delete`/`drafts.update` and the internal
   `search.modules.*` endpoints.
+- **No macOS code-signing / notarization.** Release binaries are
+  unsigned and un-notarized, and slk adds no Gatekeeper workaround (no
+  quarantine-strip hook, no `--no-quarantine` guidance);
+  `com.apple.quarantine` is treated as normal macOS behavior. Most
+  install paths do not quarantine (`curl`/`wget`, the npm postinstall
+  download, and Go's automatic ad-hoc `darwin/arm64` signing); a browser
+  download or a Homebrew Cask install does, and that first-run Gatekeeper
+  prompt is accepted. Developer ID signing + notarization (Apple
+  Developer Program, paid yearly) is judged not worth it for a CLI;
+  revisit only on a strong external driver such as an official
+  `homebrew/cask` submission (which requires notarization).
 - **Canvas read loses code-block language**: Slack's HTML route does
   not carry the original triple-backtick language hint. Inherent.
 - **No Slack Lists delete**: `slackLists.delete` does not exist on the
