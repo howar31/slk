@@ -22,7 +22,7 @@ func TestGenerateSkill_WritesFile(t *testing.T) {
 		t.Fatalf("read output: %v", err)
 	}
 	content := string(data)
-	for _, want := range []string{"name: slk", "version: 9.9.9", "## msg", "### slk channel invite"} {
+	for _, want := range []string{"name: slk", "version: 9.9.9", "## slk msg", "### slk channel invite"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("generated skill missing %q", want)
 		}

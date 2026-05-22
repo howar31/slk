@@ -8,6 +8,34 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func TestGenerate_TipsFirstParagraphAndGroupPath(t *testing.T) {
+	root := &cobra.Command{Use: "slk"}
+	grp := &cobra.Command{Use: "msg", Short: "Messages"}
+	cmd := &cobra.Command{
+		Use:         "send",
+		Short:       "Send a message",
+		Long:        "Send a message.\n\nThis second paragraph must not appear in Tips.",
+		Annotations: map[string]string{"slackMethod": "chat.postMessage", "write": "true"},
+		Run:         func(*cobra.Command, []string) {},
+	}
+	grp.AddCommand(cmd)
+	root.AddCommand(grp)
+
+	out, err := skillgen.Generate(root, "9.9.9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "**Tips:** Send a message.") {
+		t.Error("Tips should contain the first paragraph of Long")
+	}
+	if strings.Contains(out, "second paragraph must not appear") {
+		t.Error("Tips must not include paragraphs beyond the first")
+	}
+	if !strings.Contains(out, "## slk msg") {
+		t.Error("group heading should use the full command path (## slk msg)")
+	}
+}
+
 func newTree() *cobra.Command {
 	root := &cobra.Command{Use: "slk", Short: "Agent-facing Slack CLI"}
 	root.PersistentFlags().String("format", "concise", "output format: concise|json")
@@ -60,7 +88,7 @@ func TestGenerate_CommandSections(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"## channel",
+		"## slk channel",
 		"### slk channel invite",
 		"**Slack API:** `conversations.invite`",
 		"| `--channel` | ✓ |",

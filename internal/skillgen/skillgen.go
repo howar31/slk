@@ -95,7 +95,7 @@ func renderCommands(root *cobra.Command) string {
 	var b strings.Builder
 	for _, c := range visibleChildren(root) {
 		if c.HasAvailableSubCommands() {
-			fmt.Fprintf(&b, "## %s\n\n%s\n\n", c.Name(), c.Short)
+			fmt.Fprintf(&b, "## %s\n\n%s\n\n", c.CommandPath(), c.Short)
 			for _, sub := range visibleChildren(c) {
 				writeLeaf(&b, sub, "###")
 			}
@@ -124,6 +124,17 @@ func renderFlags(c *cobra.Command) string {
 	return "| Flag | Required | Default | Description |\n|------|----------|---------|-------------|\n" + rows.String()
 }
 
+// firstParagraph returns the first blank-line-delimited paragraph of s with all
+// internal whitespace collapsed to single spaces, so a command's Long help
+// renders as one clean inline Tips line regardless of how it is wrapped.
+func firstParagraph(s string) string {
+	s = strings.TrimSpace(s)
+	if idx := strings.Index(s, "\n\n"); idx >= 0 {
+		s = s[:idx]
+	}
+	return strings.Join(strings.Fields(s), " ")
+}
+
 func writeLeaf(b *strings.Builder, c *cobra.Command, level string) {
 	fmt.Fprintf(b, "%s %s\n\n%s\n\n", level, c.CommandPath(), c.Short)
 	if m := c.Annotations["slackMethod"]; m != "" {
@@ -137,7 +148,7 @@ func writeLeaf(b *strings.Builder, c *cobra.Command, level string) {
 	if c.Example != "" {
 		fmt.Fprintf(b, "**Examples:**\n\n```bash\n%s\n```\n\n", strings.TrimSpace(c.Example))
 	}
-	if tip := strings.TrimSpace(c.Long); tip != "" && tip != strings.TrimSpace(c.Short) {
+	if tip := firstParagraph(c.Long); tip != "" && tip != strings.TrimSpace(c.Short) {
 		fmt.Fprintf(b, "**Tips:** %s\n\n", tip)
 	}
 	if c.Annotations["write"] == "true" {

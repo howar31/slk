@@ -119,7 +119,7 @@ slk api <method> [flags]
 | `--json` | — | — | request body as raw JSON |
 | `--params` | — | — | query/form params as JSON object |
 
-## auth
+## slk auth
 
 Manage Slack credentials
 
@@ -179,7 +179,7 @@ Set the active profile
 slk auth switch <profile>
 ```
 
-## canvas
+## slk canvas
 
 Create, read, update, list canvases
 
@@ -253,7 +253,7 @@ slk canvas update [flags]
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
 
-## channel
+## slk channel
 
 List and manage channels
 
@@ -346,7 +346,7 @@ slk channel topic [flags]
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
 
-## list
+## slk list
 
 Create and manage Slack Lists
 
@@ -366,9 +366,6 @@ slk list add-item [flags]
 | `--id` | ✓ | — | list ID |
 
 **Tips:** Add an item to a List.
-
-JSON array of cells. Each cell needs column_id plus a typed value (rich_text for text columns). Example:
-[{"column_id":"Col0…","rich_text":[{"type":"rich_text","elements":[{"type":"rich_text_section","elements":[{"type":"text","text":"hello"}]}]}]}]
 
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
@@ -424,17 +421,10 @@ slk list update-item [flags]
 
 **Tips:** Update an item in a List.
 
-JSON array of cells. Each cell needs column_id plus a typed value (rich_text for text columns). Example:
-[{"column_id":"Col0…","rich_text":[{"type":"rich_text","elements":[{"type":"rich_text_section","elements":[{"type":"text","text":"hello"}]}]}]}]
-
---row-id is optional: when provided, slk injects it as the row_id of any cell
-that does not already specify one. Cells with an explicit row_id keep their
-own value, so the same call can update multiple rows at once.
-
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
 
-## msg
+## slk msg
 
 Read and send messages
 
@@ -578,7 +568,7 @@ slk msg update [flags]
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
 
-## search
+## slk search
 
 Search messages, channels, users
 
@@ -627,7 +617,7 @@ slk search users [flags]
 |------|----------|---------|-------------|
 | `--query` | — | — | filter users whose name/real_name contains this substring (case-insensitive) |
 
-## thread
+## slk thread
 
 Read and reply to threads
 
@@ -670,7 +660,7 @@ slk thread reply [flags]
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
 
-## user
+## slk user
 
 List and inspect users
 
@@ -707,11 +697,6 @@ slk user list [flags]
 
 **Tips:** List workspace users.
 
-By default the output excludes bot users and deactivated accounts, which are
-usually noise for agent workflows. Pass --include-bots / --include-deactivated
-to bring them back. --raw is not offered here: a multi-page response has no
-single raw envelope.
-
 ### slk user profile
 
 Show a user's profile fields
@@ -740,12 +725,6 @@ slk version [flags]
 | `--check` | — | — | check GitHub Releases for a newer version (read-only; never self-updates) |
 
 **Tips:** Print the running slk version.
-
-With --check, slk performs a single read-only HTTP request to the GitHub
-Releases API and reports whether a newer version is available, plus the
-command to upgrade. The check never downloads or replaces the binary —
-upgrades remain your package manager's job. Plain "slk version" stays
-fully offline.
 
 ## Feedback
 
