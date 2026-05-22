@@ -2,21 +2,24 @@
 
 > Agent-facing Slack CLI — token-efficient read, send, and manage for AI agents.
 
+<!-- Status -->
 [![CI](https://img.shields.io/github/actions/workflow/status/howar31/slk/ci.yml?branch=main&label=CI)](https://github.com/howar31/slk/actions/workflows/ci.yml)
+[![Go 1.25+](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+<!-- Release & distribution -->
 [![GitHub release](https://img.shields.io/github/v/release/howar31/slk)](https://github.com/howar31/slk/releases)
 [![npm version](https://img.shields.io/npm/v/@howar31/slk)](https://www.npmjs.com/package/@howar31/slk)
-[![Go 1.25+](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://go.dev/)
 
+<!-- Project standards -->
 [![Conventional Commits](https://img.shields.io/badge/conventional%20commits-1.0.0-yellow)](https://www.conventionalcommits.org)
 [![Dependabot](https://img.shields.io/badge/dependabot-enabled-025E8C?logo=dependabot)](.github/dependabot.yml)
 
+<!-- Activity & community -->
 [![Last commit](https://img.shields.io/github/last-commit/howar31/slk)](https://github.com/howar31/slk/commits/main)
 [![Open issues](https://img.shields.io/github/issues/howar31/slk)](https://github.com/howar31/slk/issues)
-[![Downloads](https://img.shields.io/github/downloads/howar31/slk/total)](https://github.com/howar31/slk/releases)
+[![Stars](https://img.shields.io/github/stars/howar31/slk)](https://github.com/howar31/slk/stargazers)
 [![Sponsor on Ko-fi](https://img.shields.io/badge/sponsor-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/howar31)
-
-[![Stars](https://img.shields.io/github/stars/howar31/slk?style=social)](https://github.com/howar31/slk/stargazers)
 
 `slk` is a single static Go binary for the Slack Web API, designed for AI agents and the
 humans they collaborate with. Compared to the official Slack MCP connector — which returns
