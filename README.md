@@ -36,7 +36,6 @@ exposes `--raw` when a caller wants full API responses.
 - [Authentication](#authentication)
 - [Agent setup](#agent-setup)
 - [Usage](#usage)
-  - [Global flags](#global-flags)
   - [Checking for updates](#checking-for-updates)
   - [Multi-line content](#multi-line-content)
   - [Drafts](#drafts)
@@ -291,31 +290,22 @@ Either reference `slk --help` from your agent's instruction file, or paste the c
 
 ## Usage
 
+The complete, always-current command reference is the CLI's own help. It shares a
+single source with the binary — the same command tree the agent skill is generated
+from — so it can't drift out of sync:
+
 ```bash
-slk msg read    --channel C0123456789 --limit 20
-slk msg send    --channel C0123456789 --text "hello"
-slk msg send    --channel C0123456789 --thread 1700000000.000000 --text "in-thread"
-slk thread reply --channel C0123456789 --thread 1700000000.000000 --text "…"
-slk search channels
-slk canvas create --title "Plan" --markdown "# Heading"
-slk canvas read   --id F0123456789
-slk list create   --title "Backlog"
-slk channel archive --channel C0123456789
-slk api conversations.info --params '{"channel":"C0123456789"}'
-slk version                # print the running version (offline)
-slk version --check        # check GitHub Releases for a newer version (read-only)
+slk --help                 # all command groups
+slk <group> --help         # a group's verbs   (e.g. slk msg --help)
+slk <group> <verb> --help  # a verb's flags     (e.g. slk msg send --help)
 ```
 
-### Global flags
+Global flags such as `--format`, `--raw`, and `--dry-run` apply to every command;
+`slk --help` lists them all. Agents get the same surface as a generated skill
+([`skills/slk/SKILL.md`](skills/slk/SKILL.md)) — see [Agent setup](#agent-setup).
 
-| Flag | Description |
-|---|---|
-| `--format concise\|json\|jsonl\|table` | Output format (default `concise`). |
-| `--as user\|bot` | Identity selection when a profile has both tokens (default `user`). |
-| `--profile <name>` | Use a specific profile from the config file. |
-| `--raw` | Return the raw Slack API response, skipping concise rendering. |
-| `--dry-run` | Validate locally and print what would be sent; do not call the API. |
-| `--no-resolve` | Skip ID-to-name resolution (faster, less readable). |
+The rest of this section documents only what `--help` can't convey on its own —
+usage traps, conceptual data shapes, and behavior notes:
 
 ### Checking for updates
 
