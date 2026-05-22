@@ -275,8 +275,6 @@ Dependency and release-notes automation:
 - `.github/release.yml` categorizes the auto-generated GitHub Release
   notes by PR label (Features / Fixes / Documentation / Dependencies /
   Maintenance / Other).
-- Repo merge policy: merge commits disabled — squash and rebase only,
-  for linear history; head branches auto-delete on merge.
 
 Security reporting: `SECURITY.md` directs vulnerability reports to
 GitHub private advisories (private vulnerability reporting is enabled);
