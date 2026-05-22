@@ -335,7 +335,7 @@ func textToBlocks(text string) string {
 	blocks := []richTextBlock{{
 		Type: "rich_text",
 		Elements: []blockSection{{
-			Type: "rich_text_section",
+			Type:     "rich_text_section",
 			Elements: []blockText{{Type: "text", Text: text}},
 		}},
 	}}
