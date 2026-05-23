@@ -9,8 +9,9 @@
 
 <!-- Release & distribution -->
 [![GitHub release](https://img.shields.io/github/v/release/howar31/slk)](https://github.com/howar31/slk/releases)
+[![GitHub release downloads](https://img.shields.io/github/downloads/howar31/slk/total?label=release%20downloads)](https://github.com/howar31/slk/releases)
 [![npm version](https://img.shields.io/npm/v/@howar31/slk)](https://www.npmjs.com/package/@howar31/slk)
-[![Downloads](https://img.shields.io/github/downloads/howar31/slk/total)](https://github.com/howar31/slk/releases)
+[![npm downloads](https://img.shields.io/npm/dm/@howar31/slk?label=npm%20downloads)](https://www.npmjs.com/package/@howar31/slk)
 
 <!-- Project standards -->
 [![Conventional Commits](https://img.shields.io/badge/conventional%20commits-1.0.0-yellow)](https://www.conventionalcommits.org)
