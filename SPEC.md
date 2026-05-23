@@ -500,9 +500,11 @@ Runtime state:
   classified by the error type from the `liveIdentity` seam: an `*api.APIError`
   is an invalid/rejected token, any other error is offline; a token Load could
   not decrypt (`auth.IsEncrypted`) is flagged locally and never hits the
-  network. The check uses a short (4s) client timeout so offline fails fast.
-  An older config's obsolete `workspace` key is ignored on Load and dropped on
-  the next Save (BurntSushi toml ignores unknown keys).
+  network. The check uses a short (4s) client timeout so offline fails fast, and
+  `--all` fans the per-profile `auth.test` calls out concurrently (results are
+  collected before printing to preserve sorted order). An older config's obsolete
+  `workspace` key is ignored on Load and dropped on the next Save (BurntSushi
+  toml ignores unknown keys).
 - **The agent skill is a generated artifact (the binary is its SSOT).**
   Rather than hand-maintain `SKILL.md`, `slk generate-skills` renders a
   skill tree (a small `slk` index, a `slk-shared` reference, and one

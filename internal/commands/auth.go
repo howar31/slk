@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/howar31/slk/internal/api"
@@ -310,6 +311,30 @@ func newAuthStatusCommand() *cobra.Command {
 			}
 			sort.Strings(names)
 
+			// Resolve the live-check suffix for each profile that needs one. --all
+			// fans out across every profile, so run the auth.test calls concurrently
+			// (each builds its own client; identitySuffix is safe to call in
+			// parallel) and collect results before printing to preserve order.
+			suffixes := make(map[string]string, len(names))
+			if !offline {
+				var mu sync.Mutex
+				var wg sync.WaitGroup
+				for _, name := range names {
+					if !(all || name == cfg.Active) {
+						continue
+					}
+					wg.Add(1)
+					go func(name string, p auth.Profile) {
+						defer wg.Done()
+						s := identitySuffix(p)
+						mu.Lock()
+						suffixes[name] = s
+						mu.Unlock()
+					}(name, cfg.Profiles[name])
+				}
+				wg.Wait()
+			}
+
 			for _, name := range names {
 				p := cfg.Profiles[name]
 				marker := " "
@@ -318,8 +343,8 @@ func newAuthStatusCommand() *cobra.Command {
 				}
 				line := fmt.Sprintf("%s %-*s (user=%v bot=%v)",
 					marker, width, name, p.UserToken != "", p.BotToken != "")
-				if !offline && (all || name == cfg.Active) {
-					line += " — " + identitySuffix(p)
+				if s, ok := suffixes[name]; ok {
+					line += " — " + s
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), line)
 			}

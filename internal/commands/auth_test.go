@@ -6,7 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/howar31/slk/internal/api"
 	"github.com/howar31/slk/internal/auth"
@@ -532,6 +535,36 @@ func TestAuthStatus_NoHintWhenNothingUnchecked(t *testing.T) {
 	}
 	if out := runStatus(t, "status", "--offline"); strings.Contains(out, "--all") {
 		t.Fatalf("--offline opted out of checks; no hint expected: %q", out)
+	}
+}
+
+func TestAuthStatus_AllRunsConcurrently(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "p1", "xoxp-1")
+	seedProfile(t, "p2", "xoxp-2")
+	seedProfile(t, "p3", "xoxp-3")
+
+	orig := liveIdentity
+	t.Cleanup(func() { liveIdentity = orig })
+	var inFlight, maxInFlight int32
+	var mu sync.Mutex
+	liveIdentity = func(token string) (string, error) {
+		cur := atomic.AddInt32(&inFlight, 1)
+		mu.Lock()
+		if cur > maxInFlight {
+			maxInFlight = cur
+		}
+		mu.Unlock()
+		time.Sleep(50 * time.Millisecond) // hold so concurrent calls overlap
+		atomic.AddInt32(&inFlight, -1)
+		return "LIVE", nil
+	}
+
+	runStatus(t, "status", "--all")
+	if maxInFlight < 2 {
+		t.Fatalf("--all should verify profiles concurrently; max in flight = %d", maxInFlight)
 	}
 }
 
