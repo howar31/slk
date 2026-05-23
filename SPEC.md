@@ -318,6 +318,24 @@ step fails on the next release:
 - `HOMEBREW_TAP_TOKEN` — GitHub fine-grained PAT, up to ~1-year expiry,
   scope **Contents: Read and write** on `howar31/homebrew-tap` only.
 
+**Release recovery (failed run).** The release is one-shot and not currently
+re-runnable: the `gate` skips if the tag exists, the tag-creation step is not
+idempotent, and there is no `workflow_dispatch`. If a run fails:
+
+1. Treat the failed attempt as a record — do **not** erase it. Leave the
+   `chore(release)` PR and its commit in place, and comment on that PR with the
+   cause and whether it was transient/resolved.
+2. Do **not** reuse the version number. Bump to the next patch in a fresh
+   `chore(release)` PR and let the automation release it.
+3. Delete only the orphaned `v<failed>` tag — it has no attached release, so it
+   is not a meaningful record. Keep anything that actually published.
+4. A transient cause (e.g. a goreleaser `401 Bad credentials` GitHub auth glitch)
+   usually clears on the re-release; if it recurs, fix the token before retrying.
+
+Precedent: v0.5.0 hit a transient goreleaser 401 while creating the GitHub
+release; nothing published, so it was re-released as v0.5.1 and PR #33 was
+annotated as the record.
+
 Dependency and release-notes automation:
 
 - `.github/dependabot.yml` disables routine version-bump PRs
