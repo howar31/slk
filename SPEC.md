@@ -12,9 +12,10 @@ exposes `--raw` for callers that want full API responses.
 Primary consumer: a developer agent (e.g. Claude Code) running on
 macOS or Linux, authenticated against the operator's own Slack app via
 OAuth user tokens (`xoxp-…`). 1:1 parity with the 13 Slack MCP tools was
-the original baseline; the curated surface has since grown to ~97 verbs
-across 16 groups, covering most user-token-reachable Slack Web API
-methods (everything the default OAuth scope set grants, excluding
+the original baseline; the curated surface has since grown to ~96 verbs
+across 15 command groups plus the `api` escape hatch, covering most
+user-token-reachable Slack Web API methods (everything the default OAuth
+scope set grants, excluding
 Enterprise-Grid `admin.*`, `xoxc`/`xoxd`-only, deprecated, and
 app-framework methods).
 
