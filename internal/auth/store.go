@@ -15,7 +15,6 @@ import (
 // re-encrypted by Save. slk does not persist the OAuth client id/secret — they are
 // used only transiently during `auth login`.
 type Profile struct {
-	Workspace string `toml:"workspace"`
 	UserToken string `toml:"user_token,omitempty"`
 	BotToken  string `toml:"bot_token,omitempty"`
 }

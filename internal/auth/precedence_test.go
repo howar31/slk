@@ -21,8 +21,8 @@ func TestResolveToken_PrecedenceMatrix(t *testing.T) {
 	cfg := &Config{
 		Active: "work",
 		Profiles: map[string]Profile{
-			"work":     {Workspace: "acme", UserToken: "xoxp-work-user", BotToken: "xoxb-work-bot"},
-			"personal": {Workspace: "private", UserToken: "xoxp-personal-user", BotToken: "xoxb-personal-bot"},
+			"work":     {UserToken: "xoxp-work-user", BotToken: "xoxb-work-bot"},
+			"personal": {UserToken: "xoxp-personal-user", BotToken: "xoxb-personal-bot"},
 		},
 	}
 	if err := Save(cfgPath, cfg); err != nil {
