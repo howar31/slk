@@ -298,14 +298,18 @@ func newCanvasShareCommand(g *GlobalFlags) *cobra.Command {
 			"write":       "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// canvases.access.set accepts exactly one of user_ids / channel_ids
+			// (Slack rejects both in one request); require the caller to pick one.
+			if (users == "") == (channels == "") {
+				return fmt.Errorf("provide exactly one of --users or --channels")
+			}
 			params := map[string]string{
 				"canvas_id":    canvasID,
 				"access_level": accessLevel,
 			}
-			// Set only whichever of user_ids/channel_ids is non-empty; not both.
 			if users != "" {
 				params["user_ids"] = users
-			} else if channels != "" {
+			} else {
 				params["channel_ids"] = channels
 			}
 			if g.DryRun {
@@ -347,11 +351,14 @@ func newCanvasUnshareCommand(g *GlobalFlags) *cobra.Command {
 			"write":       "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Mirror `share`: exactly one of user_ids / channel_ids per request.
+			if (users == "") == (channels == "") {
+				return fmt.Errorf("provide exactly one of --users or --channels")
+			}
 			params := map[string]string{"canvas_id": canvasID}
 			if users != "" {
 				params["user_ids"] = users
-			}
-			if channels != "" {
+			} else {
 				params["channel_ids"] = channels
 			}
 			if g.DryRun {

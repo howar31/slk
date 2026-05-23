@@ -1,10 +1,8 @@
 package commands
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -167,15 +165,15 @@ func newFileUploadCommand(g *GlobalFlags) *cobra.Command {
 				return err
 			}
 
-			// Step 1: read the file and request an upload URL.
-			data, err := os.ReadFile(filePath)
+			// Step 1: stat the file (for length) and request an upload URL.
+			stat, err := os.Stat(filePath)
 			if err != nil {
-				return fmt.Errorf("reading file: %w", err)
+				return fmt.Errorf("stating file: %w", err)
 			}
 			filename := filepath.Base(filePath)
 			raw, err := client.Call("files.getUploadURLExternal", map[string]string{
 				"filename": filename,
-				"length":   fmt.Sprint(len(data)),
+				"length":   fmt.Sprint(stat.Size()),
 			}, nil)
 			if err != nil {
 				return err
@@ -189,8 +187,15 @@ func newFileUploadCommand(g *GlobalFlags) *cobra.Command {
 				return fmt.Errorf("parsing upload URL response: %w", err)
 			}
 
-			// Step 2: POST the file bytes to the upload URL.
-			uploadResp, err := http.Post(urlResp.UploadURL, "application/octet-stream", bytes.NewReader(data))
+			// Step 2: stream the file to the upload URL via the client's HTTP
+			// config (timeouts, proxy). An *os.File body lets net/http set
+			// Content-Length without buffering the whole file in memory.
+			f, err := os.Open(filePath)
+			if err != nil {
+				return fmt.Errorf("opening file: %w", err)
+			}
+			defer f.Close()
+			uploadResp, err := client.HTTP.Post(urlResp.UploadURL, "application/octet-stream", f)
 			if err != nil {
 				return fmt.Errorf("uploading file content: %w", err)
 			}
@@ -204,8 +209,13 @@ func newFileUploadCommand(g *GlobalFlags) *cobra.Command {
 			if fileTitle == "" {
 				fileTitle = filename
 			}
-			filesJSON := fmt.Sprintf(`[{"id":%q,"title":%q}]`, urlResp.FileID, fileTitle)
-			completeParams := map[string]string{"files": filesJSON}
+			filesArg, err := json.Marshal([]map[string]string{
+				{"id": urlResp.FileID, "title": fileTitle},
+			})
+			if err != nil {
+				return fmt.Errorf("encoding files parameter: %w", err)
+			}
+			completeParams := map[string]string{"files": string(filesArg)}
 			if channel != "" {
 				completeParams["channel_id"] = channel
 			}

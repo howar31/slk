@@ -211,3 +211,27 @@ func TestCanvasNewVerbs_DryRun(t *testing.T) {
 		})
 	}
 }
+
+func TestCanvasShareUnshare_RequireExactlyOneTarget(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"share neither", []string{"share", "--id", "F01234567", "--access-level", "read"}},
+		{"share both", []string{"share", "--id", "F01234567", "--access-level", "read", "--users", "U0123456789", "--channels", "C0123456789"}},
+		{"unshare neither", []string{"unshare", "--id", "F01234567"}},
+		{"unshare both", []string{"unshare", "--id", "F01234567", "--users", "U0123456789", "--channels", "C0123456789"}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := newCanvasCommand(&GlobalFlags{DryRun: true})
+			cmd.SetOut(new(bytes.Buffer))
+			cmd.SetErr(new(bytes.Buffer))
+			cmd.SetArgs(tc.args)
+			if err := cmd.Execute(); err == nil {
+				t.Fatalf("%s: expected error when not exactly one of --users/--channels", tc.name)
+			}
+		})
+	}
+}
