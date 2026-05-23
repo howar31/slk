@@ -65,3 +65,17 @@ jobs:
             echo "::error::skills/slk/SKILL.md is out of date — run 'go run ./cmd/slk generate-skill' and commit."
             exit 1
           fi
+
+  version-sync:
+    name: Verify version-bearing files track VERSION
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Fan VERSION into version-bearing files
+        run: ./scripts/sync-version.sh
+      - name: Fail on drift
+        run: |
+          if ! git diff --exit-code gemini-extension.json SECURITY.md; then
+            echo "::error::gemini-extension.json / SECURITY.md are out of date — run ./scripts/sync-version.sh and commit."
+            exit 1
+          fi

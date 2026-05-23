@@ -197,10 +197,19 @@ External dependencies are intentionally narrow:
   `--text` (inline, no shell newlines) or `--markdown-file` /
   `--text-file` (`-` for stdin) — both forms are mutually exclusive at
   runtime via `readContent`.
-- **Version source of truth**: the root `VERSION` file is embedded via
-  `//go:embed` (`version.go`); `slk --version`, the skill's
-  `metadata.version`, npm, and the release all derive from it. No
-  `-ldflags` version injection.
+- **Version source of truth**: the root `VERSION` file is the single
+  version source. The binary embeds it via `//go:embed` (`version.go`,
+  feeding `slk --version`); no `-ldflags` injection. The git release tag
+  (`v<VERSION>`) and the published npm version derive automatically in CI
+  at release time (`npm/package.json`'s committed `0.0.0` is a
+  placeholder). Three committed files carry a literal copy because they
+  are read at rest by external tools, fanned out via **two separate
+  concerns**: `skills/slk/SKILL.md` (`metadata.version`) is produced by
+  `slk generate-skill`, which rebuilds the whole skill from the command
+  tree and stamps the version as one field (CI `skill` job guards drift);
+  `gemini-extension.json` (`version`) and `SECURITY.md` (supported-versions
+  table) are pure version copies rewritten by `scripts/sync-version.sh`
+  (CI `version-sync` job guards drift).
 - **The skill is generated**: `skills/slk/SKILL.md` is produced by `slk
   generate-skill` from the Cobra tree — never hand-edit it. Per-command
   `Annotations["slackMethod"]` and `Annotations["write"]` drive the
@@ -256,8 +265,10 @@ outside the public tree).
 
 ## Deploy
 
-Releases are **VERSION-driven**, not tag-driven. Bump the `VERSION` file (and
-regenerate the skill) in a release PR; on merge to `main`,
+Releases are **VERSION-driven**, not tag-driven. Bump the `VERSION` file, then
+regenerate the skill (`go run ./cmd/slk generate-skill`) and run
+`scripts/sync-version.sh` (fans VERSION into `gemini-extension.json` +
+`SECURITY.md`) in a release PR; on merge to `main`,
 `.github/workflows/release.yml` runs. A `gate` job derives `v<VERSION>` and skips
 if that tag already exists; otherwise the `goreleaser` job creates and pushes the
 tag and releases in the same run (the tag is an artifact of the release, not its
