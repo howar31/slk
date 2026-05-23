@@ -128,7 +128,7 @@ External dependencies are intentionally narrow:
 │   │   ├── context.go          # GlobalFlags struct
 │   │   ├── clientutil.go       # buildClient(g) → *api.Client
 │   │   ├── input.go            # readContent: --text vs --text-file/stdin
-│   │   ├── prompt.go           # interactive prompts + token field resolution (set-token)
+│   │   ├── prompt.go           # interactive prompts + field resolution (set-token + login)
 │   │   ├── lookup.go           # slackLookup + resolveUser wiring
 │   │   ├── api.go              # escape-hatch `slk api`
 │   │   ├── auth.go             # set-token / status / switch / logout / login /
@@ -366,9 +366,11 @@ The `npm/` directory is a thin postinstall-driven wrapper:
 Runtime state:
 
 - OAuth tokens live in `~/.config/slk/config.toml` (mode `0600`,
-  TOML-encoded, multi-profile). The `user_token`, `bot_token`, and
-  `client_secret` fields are encrypted at rest with AES-256-GCM
-  (`enc:v1:` prefix). The 32-byte key is held in the OS keyring or, for
+  TOML-encoded, multi-profile). The `user_token` and `bot_token` fields
+  are encrypted at rest with AES-256-GCM (`enc:v1:` prefix). The OAuth
+  `client_id` / `client_secret` are NOT persisted — `auth login` uses
+  them only transiently for the token exchange. The 32-byte key is held
+  in the OS keyring or, for
   headless/agent use, a key file at `~/.config/slk/.encryption_key`
   (mode `0600`); the backend is chosen by `SLK_KEYRING_BACKEND` (`auto`
   default — keyring if available, else file) and recorded as
@@ -475,14 +477,20 @@ Runtime state:
   never block on an interactive keychain unlock. `Load` tolerates a
   pre-existing plaintext value and encrypts it on the next `Save`; it
   never rewrites the config on read.
-- **`auth set-token` prompts only as a human fallback, never for agents.**
-  Tokens can be set three ways: flags (the agent/script path, unchanged),
-  `--user -` / `--bot -` reading from stdin (keeps secrets out of shell
-  history), or an interactive prompt with hidden entry. Prompting is gated
-  on stdin being a TTY and is suppressed by `--non-interactive`, so
-  headless/agent callers never block — a missing required token is a clear
-  error, not a hang. A profile that resolves to no token is refused;
-  previously a no-flag invocation silently saved an empty profile.
+- **`auth set-token` and `auth login` share one interactive model;
+  prompts are a human fallback, never for agents.** Fields can be supplied
+  by flags (the agent/script path, unchanged); set-token also reads tokens
+  from stdin via `--user -` / `--bot -` (keeps secrets out of shell
+  history). Otherwise, when stdin is a TTY, the missing fields are prompted
+  — tokens and the client secret entered hidden. Prompting is gated on a
+  TTY and suppressed by `--non-interactive`, so headless/agent callers
+  never block (a missing required value is a clear error, not a hang).
+  Shared resolution lives in `promptCtx` (`internal/commands/auth.go` +
+  `prompt.go`). set-token refuses a profile that resolves to no token
+  (previously a no-flag invocation silently saved an empty profile); login
+  mints a user token via OAuth and does NOT persist the `client_id` /
+  `client_secret` used for the exchange (non-interactive login defaults the
+  profile to `default` and prints a hint).
 - **The agent skill is a generated artifact (the binary is its SSOT).**
   Rather than hand-maintain `SKILL.md`, `slk generate-skills` renders a
   skill tree (a small `slk` index, a `slk-shared` reference, and one

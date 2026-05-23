@@ -297,3 +297,140 @@ func TestAuthSetTokenAndStatus(t *testing.T) {
 		t.Fatalf("config file leaked the plaintext token:\n%s", raw)
 	}
 }
+
+func TestAuthLogin_NonInteractiveFlagRegistered(t *testing.T) {
+	cmd := newAuthCommand(&GlobalFlags{})
+	login, _, err := cmd.Find([]string{"login"})
+	if err != nil {
+		t.Fatalf("find login: %v", err)
+	}
+	if login.Flags().Lookup("non-interactive") == nil {
+		t.Fatal("--non-interactive flag not registered on login")
+	}
+}
+
+func TestAuthLogin_InteractivePromptsAndMints(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	origTerm, origSecret := isTerminal, readSecret
+	origWait, origExch := waitForCode, exchangeCode
+	t.Cleanup(func() {
+		isTerminal, readSecret = origTerm, origSecret
+		waitForCode, exchangeCode = origWait, origExch
+	})
+	isTerminal = func(int) bool { return true }
+	readSecret = func(int) ([]byte, error) { return []byte("csecret"), nil } // client secret prompt
+	waitForCode = func(addr, path string) (string, error) { return "fakecode", nil }
+	var gotID, gotSecret string
+	exchangeCode = func(base, id, secret, code, redirect string) (auth.TokenPair, error) {
+		gotID, gotSecret = id, secret
+		return auth.TokenPair{UserToken: "xoxp-minted"}, nil
+	}
+
+	login := newAuthCommand(&GlobalFlags{})
+	login.SetIn(strings.NewReader("work\nacme\nCID123\n")) // profile, workspace, client-id
+	var out, errb bytes.Buffer
+	login.SetOut(&out)
+	login.SetErr(&errb)
+	login.SetArgs([]string{"login"})
+	if err := login.Execute(); err != nil {
+		t.Fatalf("interactive login: %v", err)
+	}
+
+	cfg, err := auth.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	p := cfg.Profiles["work"]
+	if p.UserToken != "xoxp-minted" {
+		t.Fatalf("minted user token not stored: %+v", p)
+	}
+	if p.Workspace != "acme" {
+		t.Fatalf("workspace not stored: %+v", p)
+	}
+	if gotID != "CID123" || gotSecret != "csecret" {
+		t.Fatalf("exchange got id=%q secret=%q (want prompted values)", gotID, gotSecret)
+	}
+}
+
+func TestAuthLogin_NonInteractiveDefaultsProfileAndHint(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	origWait, origExch := waitForCode, exchangeCode
+	t.Cleanup(func() { waitForCode, exchangeCode = origWait, origExch })
+	waitForCode = func(addr, path string) (string, error) { return "fakecode", nil }
+	exchangeCode = func(base, id, secret, code, redirect string) (auth.TokenPair, error) {
+		return auth.TokenPair{UserToken: "xoxp-flagminted"}, nil
+	}
+
+	login := newAuthCommand(&GlobalFlags{})
+	var out, errb bytes.Buffer
+	login.SetOut(&out)
+	login.SetErr(&errb)
+	login.SetArgs([]string{"login", "--non-interactive", "--client-id", "CID", "--client-secret", "SEC"})
+	if err := login.Execute(); err != nil {
+		t.Fatalf("non-interactive login: %v", err)
+	}
+
+	cfg, err := auth.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if cfg.Profiles["default"].UserToken != "xoxp-flagminted" {
+		t.Fatalf("default profile not saved: %+v", cfg.Profiles)
+	}
+	if combined := out.String() + errb.String(); !strings.Contains(combined, "--profile") {
+		t.Fatalf("expected a hint mentioning --profile; out=%q err=%q", out.String(), errb.String())
+	}
+}
+
+func TestAuthLogin_NonInteractiveMissingCredsErrors(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	login := newAuthCommand(&GlobalFlags{})
+	login.SetArgs([]string{"login", "--non-interactive"})
+	if err := login.Execute(); err == nil {
+		t.Fatal("expected error when client-id/secret missing in non-interactive login")
+	}
+}
+
+func TestAuthLogin_DoesNotStoreClientCredentials(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	origWait, origExch := waitForCode, exchangeCode
+	t.Cleanup(func() { waitForCode, exchangeCode = origWait, origExch })
+	waitForCode = func(addr, path string) (string, error) { return "fakecode", nil }
+	exchangeCode = func(base, id, secret, code, redirect string) (auth.TokenPair, error) {
+		return auth.TokenPair{UserToken: "xoxp-minted"}, nil
+	}
+
+	login := newAuthCommand(&GlobalFlags{})
+	login.SetArgs([]string{"login", "--non-interactive", "--client-id", "CID9", "--client-secret", "SEC9"})
+	if err := login.Execute(); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	raw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	s := string(raw)
+	if strings.Contains(s, "client_id") || strings.Contains(s, "client_secret") {
+		t.Fatalf("login must not persist client credentials; config:\n%s", s)
+	}
+	if strings.Contains(s, "CID9") || strings.Contains(s, "SEC9") {
+		t.Fatalf("client credentials leaked into config:\n%s", s)
+	}
+}
