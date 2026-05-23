@@ -2,7 +2,7 @@
 name: slk-msg
 description: "Read and send messages"
 metadata:
-  version: 0.3.0
+  version: 0.4.0
   openclaw:
     category: "productivity"
     requires:
