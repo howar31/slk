@@ -28,6 +28,13 @@ func NewRootCommand(version string) *cobra.Command {
 		newListCommand(g),
 		newChannelCommand(g),
 		newUserCommand(g),
+		newFileCommand(g),
+		newPinCommand(g),
+		newBookmarkCommand(g),
+		newTeamCommand(g),
+		newEmojiCommand(g),
+		newDndCommand(g),
+		newUsergroupCommand(g),
 		newVersionCommand(g, version),
 		newGenerateSkillCommand(version),
 	)

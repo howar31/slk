@@ -17,6 +17,17 @@ func newChannelCommand(g *GlobalFlags) *cobra.Command {
 		newChannelArchiveCommand(g),
 		newChannelInviteCommand(g),
 		newChannelTopicCommand(g),
+		newChannelInfoCommand(g),
+		newChannelMembersCommand(g),
+		newChannelJoinCommand(g),
+		newChannelLeaveCommand(g),
+		newChannelPurposeCommand(g),
+		newChannelKickCommand(g),
+		newChannelRenameCommand(g),
+		newChannelUnarchiveCommand(g),
+		newChannelOpenCommand(g),
+		newChannelMarkCommand(g),
+		newChannelCloseCommand(g),
 	)
 	return cmd
 }
@@ -219,6 +230,456 @@ func newChannelTopicCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&topic, "topic", "", "new topic")
 	cmd.MarkFlagRequired("channel")
 	cmd.MarkFlagRequired("topic")
+	return cmd
+}
+
+// parseChannelInfo extracts the channel object from a conversations.info raw
+// response and returns a single searchHit.
+func parseChannelInfo(raw []byte) (searchHit, error) {
+	var resp struct {
+		Channel struct {
+			ID         string `json:"id"`
+			Name       string `json:"name"`
+			NumMembers int    `json:"num_members"`
+			IsArchived bool   `json:"is_archived"`
+		} `json:"channel"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return searchHit{}, err
+	}
+	extra := fmt.Sprintf("%d members", resp.Channel.NumMembers)
+	if resp.Channel.IsArchived {
+		extra += " (archived)"
+	}
+	return searchHit{Name: resp.Channel.Name, ID: resp.Channel.ID, Extra: extra}, nil
+}
+
+// parseChannelMembers extracts the members slice and next_cursor from a
+// conversations.members raw response. It returns the hits and the cursor for
+// the next page (empty string when exhausted).
+func parseChannelMembers(raw []byte) ([]searchHit, string, error) {
+	var resp struct {
+		Members          []string `json:"members"`
+		ResponseMetadata struct {
+			NextCursor string `json:"next_cursor"`
+		} `json:"response_metadata"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, "", err
+	}
+	hits := make([]searchHit, len(resp.Members))
+	for i, id := range resp.Members {
+		hits[i] = searchHit{ID: id}
+	}
+	return hits, resp.ResponseMetadata.NextCursor, nil
+}
+
+func newChannelInfoCommand(g *GlobalFlags) *cobra.Command {
+	var channel string
+	cmd := &cobra.Command{
+		Use:         "info",
+		Short:       "Show channel details",
+		Annotations: map[string]string{"slackMethod": "conversations.info"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.info", map[string]string{"channel": channel}, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			hit, err := parseChannelInfo(raw)
+			if err != nil {
+				return err
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, []searchHit{hit})
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.MarkFlagRequired("channel")
+	return cmd
+}
+
+func newChannelMembersCommand(g *GlobalFlags) *cobra.Command {
+	var channel string
+	cmd := &cobra.Command{
+		Use:   "members",
+		Short: "List channel members",
+		// --raw is not offered here: a multi-page response has no single raw envelope.
+		Annotations: map[string]string{"slackMethod": "conversations.members"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			params := map[string]string{"channel": channel, "limit": "200"}
+			var hits []searchHit
+			const maxPages = 10
+			for page := 0; page < maxPages; page++ {
+				raw, err := client.Call("conversations.members", params, nil)
+				if err != nil {
+					return err
+				}
+				pageHits, nextCursor, err := parseChannelMembers(raw)
+				if err != nil {
+					return err
+				}
+				hits = append(hits, pageHits...)
+				if nextCursor == "" {
+					break
+				}
+				params["cursor"] = nextCursor
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.MarkFlagRequired("channel")
+	return cmd
+}
+
+func newChannelJoinCommand(g *GlobalFlags) *cobra.Command {
+	var channel string
+	cmd := &cobra.Command{
+		Use:   "join",
+		Short: "Join a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.join",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.join %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.join", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "joined")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.MarkFlagRequired("channel")
+	return cmd
+}
+
+func newChannelLeaveCommand(g *GlobalFlags) *cobra.Command {
+	var channel string
+	cmd := &cobra.Command{
+		Use:   "leave",
+		Short: "Leave a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.leave",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.leave %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.leave", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "left")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.MarkFlagRequired("channel")
+	return cmd
+}
+
+func newChannelPurposeCommand(g *GlobalFlags) *cobra.Command {
+	var channel, purpose string
+	cmd := &cobra.Command{
+		Use:   "purpose",
+		Short: "Set a channel's purpose",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.setPurpose",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "purpose": purpose}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.setPurpose %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.setPurpose", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "purpose set")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&purpose, "purpose", "", "new purpose")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("purpose")
+	return cmd
+}
+
+func newChannelKickCommand(g *GlobalFlags) *cobra.Command {
+	var channel, user string
+	cmd := &cobra.Command{
+		Use:   "kick",
+		Short: "Remove a user from a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.kick",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "user": user}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.kick %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.kick", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "kicked")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&user, "user", "", "user ID to remove")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("user")
+	return cmd
+}
+
+func newChannelRenameCommand(g *GlobalFlags) *cobra.Command {
+	var channel, name string
+	cmd := &cobra.Command{
+		Use:   "rename",
+		Short: "Rename a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.rename",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "name": name}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.rename %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.rename", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "renamed")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&name, "name", "", "new channel name")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("name")
+	return cmd
+}
+
+func newChannelUnarchiveCommand(g *GlobalFlags) *cobra.Command {
+	var channel string
+	cmd := &cobra.Command{
+		Use:   "unarchive",
+		Short: "Unarchive a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.unarchive",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.unarchive %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.unarchive", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "unarchived")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.MarkFlagRequired("channel")
+	return cmd
+}
+
+func newChannelOpenCommand(g *GlobalFlags) *cobra.Command {
+	var users string
+	cmd := &cobra.Command{
+		Use:   "open",
+		Short: "Open or create a direct/group message channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.open",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"users": users}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.open %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.open", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			var resp struct {
+				Channel struct {
+					ID string `json:"id"`
+				} `json:"channel"`
+			}
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "opened %s\n", resp.Channel.ID)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&users, "users", "", "comma-separated user IDs")
+	cmd.MarkFlagRequired("users")
+	return cmd
+}
+
+func newChannelMarkCommand(g *GlobalFlags) *cobra.Command {
+	var channel, ts string
+	cmd := &cobra.Command{
+		Use:   "mark",
+		Short: "Move the read cursor in a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.mark",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "ts": ts}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.mark %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.mark", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "marked")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&ts, "ts", "", "timestamp to mark as read")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("ts")
+	return cmd
+}
+
+func newChannelCloseCommand(g *GlobalFlags) *cobra.Command {
+	var channel string
+	cmd := &cobra.Command{
+		Use:   "close",
+		Short: "Close a direct/group message channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.close",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.close %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.close", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "closed")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.MarkFlagRequired("channel")
 	return cmd
 }
 

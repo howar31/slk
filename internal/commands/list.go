@@ -63,6 +63,8 @@ func newListCommand(g *GlobalFlags) *cobra.Command {
 		newListReadCommand(g),
 		newListAddItemCommand(g),
 		newListUpdateItemCommand(g),
+		newListDeleteItemCommand(g),
+		newListUpdateCommand(g),
 	)
 	return cmd
 }
@@ -227,6 +229,94 @@ own value, so the same call can update multiple rows at once.`
 	cmd.Flags().StringVar(&listID, "id", "", "list ID")
 	cmd.Flags().StringVar(&rowID, "row-id", "", "row to update; injected as cells[].row_id when a cell omits it")
 	cmd.Flags().StringVar(&fieldsJSON, "fields", "[]", "updated cells as JSON array (see Long help for shape)")
+	cmd.MarkFlagRequired("id")
+	return cmd
+}
+
+func newListDeleteItemCommand(g *GlobalFlags) *cobra.Command {
+	var listID, rowID string
+	cmd := &cobra.Command{
+		Use:   "delete-item",
+		Short: "Delete one item from a List",
+		Annotations: map[string]string{
+			"slackMethod": "slackLists.items.delete",
+			"write":       "true",
+		},
+		Long: "Deletes one List item. The whole-list delete API (slackLists.delete) does not exist — remove a List in the Slack UI.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"list_id": listID, "id": rowID}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] slackLists.items.delete %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("slackLists.items.delete", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "item deleted")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&listID, "id", "", "list ID")
+	cmd.Flags().StringVar(&rowID, "row-id", "", "row (item) ID to delete")
+	cmd.MarkFlagRequired("id")
+	cmd.MarkFlagRequired("row-id")
+	return cmd
+}
+
+func newListUpdateCommand(g *GlobalFlags) *cobra.Command {
+	var listID, name, description, todoMode string
+	cmd := &cobra.Command{
+		Use:   "update",
+		Short: "Update metadata of a List",
+		Annotations: map[string]string{
+			"slackMethod": "slackLists.update",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"id": listID}
+			// Only include optional params that were explicitly set.
+			if cmd.Flags().Changed("name") {
+				params["name"] = name
+			}
+			if cmd.Flags().Changed("description") {
+				params["description"] = description
+			}
+			if cmd.Flags().Changed("todo-mode") {
+				params["todo_mode"] = todoMode
+			}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] slackLists.update %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("slackLists.update", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "list updated")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&listID, "id", "", "list ID")
+	cmd.Flags().StringVar(&name, "name", "", "new name for the list")
+	cmd.Flags().StringVar(&description, "description", "", "new description for the list")
+	cmd.Flags().StringVar(&todoMode, "todo-mode", "", "todo mode string (e.g. \"on\" or \"off\")")
 	cmd.MarkFlagRequired("id")
 	return cmd
 }

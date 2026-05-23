@@ -24,7 +24,15 @@ func (c canvasHit) Concise() string {
 
 func newCanvasCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{Use: "canvas", Short: "Create, read, update, list canvases"}
-	cmd.AddCommand(newCanvasCreateCommand(g), newCanvasReadCommand(g), newCanvasUpdateCommand(g), newCanvasListCommand(g))
+	cmd.AddCommand(
+		newCanvasCreateCommand(g),
+		newCanvasReadCommand(g),
+		newCanvasUpdateCommand(g),
+		newCanvasListCommand(g),
+		newCanvasDeleteCommand(g),
+		newCanvasShareCommand(g),
+		newCanvasUnshareCommand(g),
+	)
 	return cmd
 }
 
@@ -240,6 +248,142 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&markdownFile, "markdown-file", "", "path to markdown file (use - for stdin)")
 	cmd.Flags().StringVar(&action, "action", "replace", "edit action: replace (default), prepend, append")
 	cmd.Flags().StringVar(&sectionID, "section-id", "", "optional section ID to target")
+	cmd.MarkFlagRequired("id")
+	return cmd
+}
+
+func newCanvasDeleteCommand(g *GlobalFlags) *cobra.Command {
+	var canvasID string
+	cmd := &cobra.Command{
+		Use:   "delete",
+		Short: "Delete a canvas",
+		Annotations: map[string]string{
+			"slackMethod": "canvases.delete",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"canvas_id": canvasID}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] canvases.delete %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("canvases.delete", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "canvas deleted")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&canvasID, "id", "", "canvas ID")
+	cmd.MarkFlagRequired("id")
+	return cmd
+}
+
+func newCanvasShareCommand(g *GlobalFlags) *cobra.Command {
+	var canvasID, accessLevel, users, channels string
+	cmd := &cobra.Command{
+		Use:   "share",
+		Short: "Set access on a canvas for users or channels",
+		Annotations: map[string]string{
+			"slackMethod": "canvases.access.set",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// canvases.access.set accepts exactly one of user_ids / channel_ids
+			// (Slack rejects both in one request); require the caller to pick one.
+			if (users == "") == (channels == "") {
+				return fmt.Errorf("provide exactly one of --users or --channels")
+			}
+			params := map[string]string{
+				"canvas_id":    canvasID,
+				"access_level": accessLevel,
+			}
+			if users != "" {
+				params["user_ids"] = users
+			} else {
+				params["channel_ids"] = channels
+			}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] canvases.access.set %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("canvases.access.set", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "access set")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&canvasID, "id", "", "canvas ID")
+	cmd.Flags().StringVar(&accessLevel, "access-level", "", "access level: read, write, or owner")
+	cmd.Flags().StringVar(&users, "users", "", "comma-separated user IDs to grant access")
+	cmd.Flags().StringVar(&channels, "channels", "", "comma-separated channel IDs to grant access")
+	cmd.MarkFlagRequired("id")
+	cmd.MarkFlagRequired("access-level")
+	return cmd
+}
+
+func newCanvasUnshareCommand(g *GlobalFlags) *cobra.Command {
+	var canvasID, users, channels string
+	cmd := &cobra.Command{
+		Use:   "unshare",
+		Short: "Remove access on a canvas for users or channels",
+		Annotations: map[string]string{
+			"slackMethod": "canvases.access.delete",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Mirror `share`: exactly one of user_ids / channel_ids per request.
+			if (users == "") == (channels == "") {
+				return fmt.Errorf("provide exactly one of --users or --channels")
+			}
+			params := map[string]string{"canvas_id": canvasID}
+			if users != "" {
+				params["user_ids"] = users
+			} else {
+				params["channel_ids"] = channels
+			}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] canvases.access.delete %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("canvases.access.delete", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "access removed")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&canvasID, "id", "", "canvas ID")
+	cmd.Flags().StringVar(&users, "users", "", "comma-separated user IDs to remove access")
+	cmd.Flags().StringVar(&channels, "channels", "", "comma-separated channel IDs to remove access")
 	cmd.MarkFlagRequired("id")
 	return cmd
 }

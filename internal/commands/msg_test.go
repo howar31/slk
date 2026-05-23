@@ -2,10 +2,16 @@ package commands
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/howar31/slk/internal/api"
 )
 
 func TestParseScheduledMessageID(t *testing.T) {
@@ -205,5 +211,300 @@ func TestMsgSend_RequiresTextOrFile(t *testing.T) {
 	cmd.SetArgs([]string{"send", "--channel", "C1"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("expected error when neither --text nor --text-file given")
+	}
+}
+
+// --- flag-registration tests for the 8 new verbs ---
+
+func TestMsgNewVerbs_FlagsRegistered(t *testing.T) {
+	cases := []struct {
+		verb  string
+		flags []string
+	}{
+		{"unreact", []string{"channel", "ts", "emoji"}},
+		{"unschedule", []string{"channel", "id"}},
+		{"scheduled", []string{"channel"}},
+		{"permalink", []string{"channel", "ts"}},
+		{"ephemeral", []string{"channel", "user", "text", "text-file"}},
+		{"me", []string{"channel", "text"}},
+		{"reactions", []string{"channel", "ts"}},
+		{"reacted", []string{"user"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.verb, func(t *testing.T) {
+			g := &GlobalFlags{}
+			cmd := newMsgCommand(g)
+			sub, _, err := cmd.Find([]string{tc.verb})
+			if err != nil {
+				t.Fatalf("find %s: %v", tc.verb, err)
+			}
+			for _, name := range tc.flags {
+				if sub.Flags().Lookup(name) == nil {
+					t.Errorf("missing flag --%s on msg %s", name, tc.verb)
+				}
+			}
+		})
+	}
+}
+
+// --- dry-run table for the new WRITE verbs ---
+
+func TestMsgNewWriteVerbs_DryRun(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			"unreact",
+			[]string{"unreact", "--channel", "C0123456789", "--ts", "1.0", "--emoji", "thumbsup"},
+			"reactions.remove",
+		},
+		{
+			"unschedule",
+			[]string{"unschedule", "--channel", "C0123456789", "--id", "Q0123"},
+			"chat.deleteScheduledMessage",
+		},
+		{
+			"ephemeral",
+			[]string{"ephemeral", "--channel", "C0123456789", "--user", "U0123456789", "--text", "hi"},
+			"chat.postEphemeral",
+		},
+		{
+			"me",
+			[]string{"me", "--channel", "C0123456789", "--text", "waves"},
+			"chat.meMessage",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := &GlobalFlags{DryRun: true}
+			cmd := newMsgCommand(g)
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetArgs(tc.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute: %v", err)
+			}
+			if !strings.Contains(out.String(), tc.want) {
+				t.Fatalf("want %q in %q", tc.want, out.String())
+			}
+		})
+	}
+}
+
+// --- httptest-based parse-helper tests for the 3 new READ verbs ---
+
+func TestParseMsgScheduled(t *testing.T) {
+	raw := []byte(`{
+		"ok": true,
+		"scheduled_messages": [
+			{"id": "Q0123456789", "channel_id": "C0123456789", "post_at": 1799999999, "text": "hello Alice"}
+		]
+	}`)
+	hits, err := parseMsgScheduled(raw)
+	if err != nil {
+		t.Fatalf("parseMsgScheduled: %v", err)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("expected 1 hit, got %d", len(hits))
+	}
+	if hits[0].ID != "Q0123456789" {
+		t.Errorf("ID = %q, want Q0123456789", hits[0].ID)
+	}
+	if hits[0].Name != "hello Alice" {
+		t.Errorf("Name = %q, want 'hello Alice'", hits[0].Name)
+	}
+	if hits[0].Extra != "1799999999" {
+		t.Errorf("Extra = %q, want '1799999999'", hits[0].Extra)
+	}
+}
+
+func TestMsgScheduled_Httptest(t *testing.T) {
+	payload := map[string]interface{}{
+		"ok": true,
+		"scheduled_messages": []map[string]interface{}{
+			{"id": "Q0123456789", "channel_id": "C0123456789", "post_at": 1799999999, "text": "hello Bob"},
+		},
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer srv.Close()
+
+	c := api.New("xoxp-test")
+	c.BaseURL = srv.URL
+
+	raw, err := c.Call("chat.scheduledMessages.list", map[string]string{}, nil)
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	hits, err := parseMsgScheduled(raw)
+	if err != nil {
+		t.Fatalf("parseMsgScheduled: %v", err)
+	}
+	if len(hits) != 1 || hits[0].ID != "Q0123456789" {
+		t.Fatalf("unexpected hits: %v", hits)
+	}
+}
+
+func TestParseMsgReactions(t *testing.T) {
+	raw := []byte(`{
+		"ok": true,
+		"type": "message",
+		"message": {
+			"reactions": [
+				{"name": "thumbsup", "count": 3},
+				{"name": "heart", "count": 1}
+			]
+		}
+	}`)
+	hits, err := parseMsgReactions(raw)
+	if err != nil {
+		t.Fatalf("parseMsgReactions: %v", err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("expected 2 hits, got %d", len(hits))
+	}
+	if hits[0].Name != "thumbsup" || hits[0].Extra != "3" {
+		t.Errorf("hits[0] = %+v", hits[0])
+	}
+	if hits[1].Name != "heart" || hits[1].Extra != "1" {
+		t.Errorf("hits[1] = %+v", hits[1])
+	}
+}
+
+func TestMsgReactions_Httptest(t *testing.T) {
+	payload := map[string]interface{}{
+		"ok":   true,
+		"type": "message",
+		"message": map[string]interface{}{
+			"reactions": []map[string]interface{}{
+				{"name": "wave", "count": 2},
+			},
+		},
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer srv.Close()
+
+	c := api.New("xoxp-test")
+	c.BaseURL = srv.URL
+
+	raw, err := c.Call("reactions.get", map[string]string{"channel": "C0123456789", "timestamp": "1.0"}, nil)
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	hits, err := parseMsgReactions(raw)
+	if err != nil {
+		t.Fatalf("parseMsgReactions: %v", err)
+	}
+	if len(hits) != 1 || hits[0].Name != "wave" || hits[0].Extra != "2" {
+		t.Fatalf("unexpected hits: %v", hits)
+	}
+}
+
+func TestParseMsgReacted(t *testing.T) {
+	raw := []byte(`{
+		"ok": true,
+		"items": [
+			{"type": "message", "message": {"ts": "1779191572.000100"}},
+			{"type": "file", "file": {"id": "F01234567"}}
+		]
+	}`)
+	hits, err := parseMsgReacted(raw)
+	if err != nil {
+		t.Fatalf("parseMsgReacted: %v", err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("expected 2 hits, got %d", len(hits))
+	}
+	if hits[0].ID != "1779191572.000100" || hits[0].Extra != "message" {
+		t.Errorf("hits[0] = %+v", hits[0])
+	}
+	if hits[1].ID != "F01234567" || hits[1].Extra != "file" {
+		t.Errorf("hits[1] = %+v", hits[1])
+	}
+}
+
+func TestMsgReacted_Httptest(t *testing.T) {
+	payload := map[string]interface{}{
+		"ok": true,
+		"items": []map[string]interface{}{
+			{
+				"type":    "message",
+				"message": map[string]interface{}{"ts": "1779191572.000200"},
+			},
+		},
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer srv.Close()
+
+	c := api.New("xoxp-test")
+	c.BaseURL = srv.URL
+
+	raw, err := c.Call("reactions.list", map[string]string{}, nil)
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	hits, err := parseMsgReacted(raw)
+	if err != nil {
+		t.Fatalf("parseMsgReacted: %v", err)
+	}
+	if len(hits) != 1 || hits[0].ID != "1779191572.000200" || hits[0].Extra != "message" {
+		t.Fatalf("unexpected hits: %v", hits)
+	}
+}
+
+func TestMsgPermalink_FlagsAndAnnotation(t *testing.T) {
+	g := &GlobalFlags{}
+	cmd := newMsgCommand(g)
+	sub, _, err := cmd.Find([]string{"permalink"})
+	if err != nil {
+		t.Fatalf("find permalink: %v", err)
+	}
+	if sub.Annotations["slackMethod"] != "chat.getPermalink" {
+		t.Errorf("annotation slackMethod = %q", sub.Annotations["slackMethod"])
+	}
+	for _, name := range []string{"channel", "ts"} {
+		if sub.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag --%s on msg permalink", name)
+		}
+	}
+}
+
+func TestMsgPermalink_Httptest(t *testing.T) {
+	wantLink := fmt.Sprintf("https://example.slack.com/archives/C0123456789/p1779191572000100")
+	payload := map[string]interface{}{
+		"ok":        true,
+		"channel":   "C0123456789",
+		"permalink": wantLink,
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(payload)
+	}))
+	defer srv.Close()
+
+	c := api.New("xoxp-test")
+	c.BaseURL = srv.URL
+
+	raw, err := c.Call("chat.getPermalink", map[string]string{"channel": "C0123456789", "message_ts": "1779191572.000100"}, nil)
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	var resp struct {
+		Permalink string `json:"permalink"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if resp.Permalink != wantLink {
+		t.Errorf("permalink = %q, want %q", resp.Permalink, wantLink)
 	}
 }

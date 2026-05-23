@@ -71,8 +71,16 @@ func newMsgCommand(g *GlobalFlags) *cobra.Command {
 		newMsgUpdateCommand(g),
 		newMsgWriteCommand(g, "delete", "chat.delete", []string{"channel", "ts"}),
 		newMsgReactCommand(g),
+		newMsgUnreactCommand(g),
 		newMsgScheduleCommand(g),
+		newMsgUnscheduleCommand(g),
+		newMsgScheduledCommand(g),
 		newMsgDraftCommand(g),
+		newMsgPermalinkCommand(g),
+		newMsgEphemeralCommand(g),
+		newMsgMeCommand(g),
+		newMsgReactionsCommand(g),
+		newMsgReactedCommand(g),
 	)
 	return cmd
 }
@@ -428,6 +436,389 @@ func parseScheduledMessageID(raw []byte) string {
 	}
 	_ = json.Unmarshal(raw, &resp)
 	return resp.ID
+}
+
+func newMsgUnreactCommand(g *GlobalFlags) *cobra.Command {
+	var channel, ts, emoji string
+	cmd := &cobra.Command{
+		Use:   "unreact",
+		Short: "Remove an emoji reaction from a message",
+		Annotations: map[string]string{
+			"slackMethod": "reactions.remove",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "timestamp": ts, "name": emoji}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] reactions.remove %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("reactions.remove", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "unreacted")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&ts, "ts", "", "message timestamp")
+	cmd.Flags().StringVar(&emoji, "emoji", "", "emoji name without colons")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("ts")
+	cmd.MarkFlagRequired("emoji")
+	return cmd
+}
+
+func newMsgUnscheduleCommand(g *GlobalFlags) *cobra.Command {
+	var channel, id string
+	cmd := &cobra.Command{
+		Use:   "unschedule",
+		Short: "Cancel a scheduled message",
+		Long:  "Cancel a scheduled message. chat.deleteScheduledMessage may return ok=true for schedules within ~5 minutes of post_at yet the message still posts.",
+		Annotations: map[string]string{
+			"slackMethod": "chat.deleteScheduledMessage",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "scheduled_message_id": id}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.deleteScheduledMessage %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("chat.deleteScheduledMessage", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "unscheduled")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&id, "id", "", "scheduled message ID")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("id")
+	return cmd
+}
+
+// parseMsgScheduled parses a chat.scheduledMessages.list response into searchHit rows.
+func parseMsgScheduled(raw []byte) ([]searchHit, error) {
+	var resp struct {
+		ScheduledMessages []struct {
+			ID        string `json:"id"`
+			ChannelID string `json:"channel_id"`
+			PostAt    int64  `json:"post_at"`
+			Text      string `json:"text"`
+		} `json:"scheduled_messages"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	hits := make([]searchHit, len(resp.ScheduledMessages))
+	for i, m := range resp.ScheduledMessages {
+		hits[i] = searchHit{
+			Name:  m.Text,
+			ID:    m.ID,
+			Extra: fmt.Sprintf("%d", m.PostAt),
+		}
+	}
+	return hits, nil
+}
+
+func newMsgScheduledCommand(g *GlobalFlags) *cobra.Command {
+	var channel string
+	cmd := &cobra.Command{
+		Use:         "scheduled",
+		Short:       "List scheduled messages",
+		Annotations: map[string]string{"slackMethod": "chat.scheduledMessages.list"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			params := map[string]string{}
+			if channel != "" {
+				params["channel"] = channel
+			}
+			raw, err := client.Call("chat.scheduledMessages.list", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			hits, err := parseMsgScheduled(raw)
+			if err != nil {
+				return err
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "filter by channel ID (optional)")
+	return cmd
+}
+
+func newMsgPermalinkCommand(g *GlobalFlags) *cobra.Command {
+	var channel, ts string
+	cmd := &cobra.Command{
+		Use:         "permalink",
+		Short:       "Get the permalink for a message",
+		Annotations: map[string]string{"slackMethod": "chat.getPermalink"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			params := map[string]string{"channel": channel, "message_ts": ts}
+			raw, err := client.Call("chat.getPermalink", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			var resp struct {
+				Permalink string `json:"permalink"`
+			}
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), resp.Permalink)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&ts, "ts", "", "message timestamp")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("ts")
+	return cmd
+}
+
+func newMsgEphemeralCommand(g *GlobalFlags) *cobra.Command {
+	var channel, user, text, textFile string
+	cmd := &cobra.Command{
+		Use:   "ephemeral",
+		Short: "Send an ephemeral message visible only to the target user",
+		Annotations: map[string]string{
+			"slackMethod": "chat.postEphemeral",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			content, err := readContent(text, textFile, "--text", "--text-file")
+			if err != nil {
+				return err
+			}
+			params := map[string]string{"channel": channel, "user": user, "text": content}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postEphemeral %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("chat.postEphemeral", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "sent ephemeral")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&user, "user", "", "user ID of the recipient")
+	cmd.Flags().StringVar(&text, "text", "", "message text")
+	cmd.Flags().StringVar(&textFile, "text-file", "", "path to text file (use - for stdin)")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("user")
+	return cmd
+}
+
+func newMsgMeCommand(g *GlobalFlags) *cobra.Command {
+	var channel, text string
+	cmd := &cobra.Command{
+		Use:   "me",
+		Short: "Send a /me message (italicized action text)",
+		Annotations: map[string]string{
+			"slackMethod": "chat.meMessage",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel": channel, "text": text}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.meMessage %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("chat.meMessage", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "sent")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&text, "text", "", "action text")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("text")
+	return cmd
+}
+
+// parseMsgReactions parses a reactions.get response and returns the reactions
+// on the message as searchHit rows.
+func parseMsgReactions(raw []byte) ([]searchHit, error) {
+	var resp struct {
+		Message struct {
+			Reactions []struct {
+				Name  string `json:"name"`
+				Count int    `json:"count"`
+			} `json:"reactions"`
+		} `json:"message"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	hits := make([]searchHit, len(resp.Message.Reactions))
+	for i, r := range resp.Message.Reactions {
+		hits[i] = searchHit{
+			Name:  r.Name,
+			Extra: fmt.Sprintf("%d", r.Count),
+		}
+	}
+	return hits, nil
+}
+
+func newMsgReactionsCommand(g *GlobalFlags) *cobra.Command {
+	var channel, ts string
+	cmd := &cobra.Command{
+		Use:         "reactions",
+		Short:       "List reactions on a message",
+		Annotations: map[string]string{"slackMethod": "reactions.get"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			params := map[string]string{"channel": channel, "timestamp": ts}
+			raw, err := client.Call("reactions.get", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			hits, err := parseMsgReactions(raw)
+			if err != nil {
+				return err
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&ts, "ts", "", "message timestamp")
+	cmd.MarkFlagRequired("channel")
+	cmd.MarkFlagRequired("ts")
+	return cmd
+}
+
+// parseMsgReacted parses a reactions.list response and returns reacted items as searchHit rows.
+func parseMsgReacted(raw []byte) ([]searchHit, error) {
+	var resp struct {
+		Items []struct {
+			Type    string `json:"type"`
+			Message struct {
+				TS string `json:"ts"`
+			} `json:"message"`
+			File struct {
+				ID string `json:"id"`
+			} `json:"file"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	hits := make([]searchHit, len(resp.Items))
+	for i, item := range resp.Items {
+		var id string
+		switch item.Type {
+		case "message":
+			id = item.Message.TS
+		case "file":
+			id = item.File.ID
+		default:
+			id = ""
+		}
+		hits[i] = searchHit{
+			ID:    id,
+			Extra: item.Type,
+		}
+	}
+	return hits, nil
+}
+
+func newMsgReactedCommand(g *GlobalFlags) *cobra.Command {
+	var user string
+	cmd := &cobra.Command{
+		Use:         "reacted",
+		Short:       "List items the user has reacted to",
+		Annotations: map[string]string{"slackMethod": "reactions.list"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			params := map[string]string{}
+			if user != "" {
+				params["user"] = user
+			}
+			raw, err := client.Call("reactions.list", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			hits, err := parseMsgReacted(raw)
+			if err != nil {
+				return err
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
+		},
+	}
+	cmd.Flags().StringVar(&user, "user", "", "user ID (defaults to the authed user when empty)")
+	return cmd
 }
 
 func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {

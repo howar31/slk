@@ -3,6 +3,8 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/howar31/slk/internal/api"
 	"github.com/howar31/slk/internal/output"
@@ -37,7 +39,18 @@ func (p userProfile) Concise() string {
 
 func newUserCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{Use: "user", Short: "List and inspect users"}
-	cmd.AddCommand(newUserListCommand(g), newUserInfoCommand(g), newUserProfileCommand(g))
+	cmd.AddCommand(
+		newUserListCommand(g),
+		newUserInfoCommand(g),
+		newUserProfileCommand(g),
+		newUserByEmailCommand(g),
+		newUserPresenceCommand(g),
+		newUserChannelsCommand(g),
+		newUserSetProfileCommand(g),
+		newUserSetPhotoCommand(g),
+		newUserDeletePhotoCommand(g),
+		newUserSetPresenceCommand(g),
+	)
 	return cmd
 }
 
@@ -185,6 +198,306 @@ func newUserInfoCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&userID, "user", "", "user ID")
 	cmd.MarkFlagRequired("user")
+	return cmd
+}
+
+// parseUserByEmail extracts the user object from a users.lookupByEmail raw
+// response and returns a searchHit.
+func parseUserByEmail(raw []byte) (searchHit, error) {
+	var resp struct {
+		User struct {
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			RealName string `json:"real_name"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return searchHit{}, err
+	}
+	return searchHit{Name: resp.User.Name, ID: resp.User.ID, Extra: resp.User.RealName}, nil
+}
+
+func newUserByEmailCommand(g *GlobalFlags) *cobra.Command {
+	var email string
+	cmd := &cobra.Command{
+		Use:         "by-email",
+		Short:       "Look up a user by email address",
+		Annotations: map[string]string{"slackMethod": "users.lookupByEmail"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("users.lookupByEmail", map[string]string{"email": email}, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			hit, err := parseUserByEmail(raw)
+			if err != nil {
+				return err
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, []searchHit{hit})
+		},
+	}
+	cmd.Flags().StringVar(&email, "email", "", "email address to look up")
+	cmd.MarkFlagRequired("email")
+	return cmd
+}
+
+// userPresence holds the presence fields returned by users.getPresence.
+type userPresence struct {
+	Presence string `json:"presence"`
+	Online   bool   `json:"online"`
+}
+
+func (p userPresence) Concise() string {
+	return fmt.Sprintf("presence=%s online=%v", p.Presence, p.Online)
+}
+
+func newUserPresenceCommand(g *GlobalFlags) *cobra.Command {
+	var userID string
+	cmd := &cobra.Command{
+		Use:         "presence",
+		Short:       "Get a user's presence status",
+		Annotations: map[string]string{"slackMethod": "users.getPresence"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			params := map[string]string{}
+			if userID != "" {
+				params["user"] = userID
+			}
+			raw, err := client.Call("users.getPresence", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			var resp userPresence
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				return err
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, []userPresence{resp})
+		},
+	}
+	cmd.Flags().StringVar(&userID, "user", "", "user ID (defaults to the token owner when empty)")
+	return cmd
+}
+
+// parseUserChannels extracts channel hits from a single users.conversations
+// page response.
+func parseUserChannels(raw []byte) ([]searchHit, error) {
+	var resp struct {
+		Channels []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"channels"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	hits := make([]searchHit, 0, len(resp.Channels))
+	for _, c := range resp.Channels {
+		hits = append(hits, searchHit{Name: c.Name, ID: c.ID})
+	}
+	return hits, nil
+}
+
+func newUserChannelsCommand(g *GlobalFlags) *cobra.Command {
+	var userID, types string
+	cmd := &cobra.Command{
+		Use:         "channels",
+		Short:       "List channels a user belongs to",
+		Annotations: map[string]string{"slackMethod": "users.conversations"},
+		// --raw is not offered here: a multi-page response has no single raw envelope.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			params := map[string]string{}
+			if userID != "" {
+				params["user"] = userID
+			}
+			if types != "" {
+				params["types"] = types
+			}
+			pages, err := client.CallAll("users.conversations", params, 10)
+			if err != nil {
+				return err
+			}
+			var hits []searchHit
+			for _, page := range pages {
+				pageHits, err := parseUserChannels(page)
+				if err != nil {
+					return err
+				}
+				hits = append(hits, pageHits...)
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
+		},
+	}
+	cmd.Flags().StringVar(&userID, "user", "", "user ID (defaults to the token owner when empty)")
+	cmd.Flags().StringVar(&types, "types", "", "conversation types filter (e.g. public_channel,private_channel,mpim,im)")
+	return cmd
+}
+
+func newUserSetProfileCommand(g *GlobalFlags) *cobra.Command {
+	var name, value, profile string
+	cmd := &cobra.Command{
+		Use:   "set-profile",
+		Short: "Update a profile field or set raw profile JSON",
+		Annotations: map[string]string{
+			"slackMethod": "users.profile.set",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{}
+			if profile != "" {
+				params["profile"] = profile
+			} else {
+				params["name"] = name
+				params["value"] = value
+			}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.profile.set %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("users.profile.set", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "profile updated")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&name, "name", "", "profile field name (used with --value)")
+	cmd.Flags().StringVar(&value, "value", "", "profile field value (used with --name)")
+	cmd.Flags().StringVar(&profile, "profile", "", "raw JSON profile object (overrides --name/--value)")
+	return cmd
+}
+
+func newUserSetPhotoCommand(g *GlobalFlags) *cobra.Command {
+	var file string
+	cmd := &cobra.Command{
+		Use:   "set-photo",
+		Short: "Upload a profile photo",
+		Annotations: map[string]string{
+			"slackMethod": "users.setPhoto",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.setPhoto file=%s\n", file)
+				return nil
+			}
+			data, err := os.ReadFile(file)
+			if err != nil {
+				return err
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.CallMultipart("users.setPhoto", map[string]string{}, "image", filepath.Base(file), data)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "photo set")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&file, "file", "", "path to image file")
+	cmd.MarkFlagRequired("file")
+	return cmd
+}
+
+func newUserDeletePhotoCommand(g *GlobalFlags) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete-photo",
+		Short: "Delete the current user's profile photo",
+		Annotations: map[string]string{
+			"slackMethod": "users.deletePhoto",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.deletePhoto %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("users.deletePhoto", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "photo deleted")
+			return nil
+		},
+	}
+	return cmd
+}
+
+func newUserSetPresenceCommand(g *GlobalFlags) *cobra.Command {
+	var presence string
+	cmd := &cobra.Command{
+		Use:   "set-presence",
+		Short: "Set the token owner's presence (auto or away)",
+		Annotations: map[string]string{
+			"slackMethod": "users.setPresence",
+			"write":       "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"presence": presence}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.setPresence %v\n", params)
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("users.setPresence", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "presence set")
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&presence, "presence", "", "presence value: auto or away")
+	cmd.MarkFlagRequired("presence")
 	return cmd
 }
 
