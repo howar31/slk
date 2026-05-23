@@ -2,7 +2,7 @@
 name: slk
 description: "slk CLI: read/send Slack messages, manage canvases, lists, channels from the terminal with token-efficient output."
 metadata:
-  version: 0.3.0
+  version: 0.4.0
   openclaw:
     category: "productivity"
     requires:

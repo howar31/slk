@@ -2,7 +2,7 @@
 name: slk-search
 description: "Search messages, channels, users"
 metadata:
-  version: 0.3.0
+  version: 0.4.0
   openclaw:
     category: "productivity"
     requires:
