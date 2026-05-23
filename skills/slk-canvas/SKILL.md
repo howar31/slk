@@ -2,7 +2,7 @@
 name: slk-canvas
 description: "Create, read, update, list canvases"
 metadata:
-  version: 0.6.0
+  version: 0.7.0
   openclaw:
     category: "productivity"
     requires:
