@@ -1,6 +1,6 @@
 {
   "name": "slk",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Agent-facing Slack CLI for AI agents.",
   "contextFileName": "skills/slk/SKILL.md"
 }

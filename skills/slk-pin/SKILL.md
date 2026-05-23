@@ -2,7 +2,7 @@
 name: slk-pin
 description: "Pin and unpin items"
 metadata:
-  version: 0.5.0
+  version: 0.5.1
   openclaw:
     category: "productivity"
     requires:
