@@ -2,7 +2,7 @@
 name: slk-auth
 description: "Manage Slack credentials"
 metadata:
-  version: 0.5.1
+  version: 0.6.0
   openclaw:
     category: "productivity"
     requires:
