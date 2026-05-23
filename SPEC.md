@@ -491,6 +491,18 @@ Runtime state:
   mints a user token via OAuth and does NOT persist the `client_id` /
   `client_secret` used for the exchange (non-interactive login defaults the
   profile to `default` and prints a hint).
+- **`auth status` verifies live, identity is derived not stored.** A profile
+  holds only its tokens — there is no stored workspace/label field (a removed
+  cosmetic that no logic read; the profile name already disambiguates). Instead
+  `auth status` resolves identity live: by default it runs `auth.test` for the
+  active profile (`--all` for every profile, `--offline` to skip the network),
+  appending `<team> (<team_id>) — <user> (<user_id>) @ <url>`. Failures are
+  classified by the error type from the `liveIdentity` seam: an `*api.APIError`
+  is an invalid/rejected token, any other error is offline; a token Load could
+  not decrypt (`auth.IsEncrypted`) is flagged locally and never hits the
+  network. The check uses a short (4s) client timeout so offline fails fast.
+  An older config's obsolete `workspace` key is ignored on Load and dropped on
+  the next Save (BurntSushi toml ignores unknown keys).
 - **The agent skill is a generated artifact (the binary is its SSOT).**
   Rather than hand-maintain `SKILL.md`, `slk generate-skills` renders a
   skill tree (a small `slk` index, a `slk-shared` reference, and one

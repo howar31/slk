@@ -16,6 +16,11 @@ const encPrefix = "enc:v1:"
 // isEncrypted reports whether v is an encrypted field value.
 func isEncrypted(v string) bool { return strings.HasPrefix(v, encPrefix) }
 
+// IsEncrypted reports whether v is still an slk-encrypted (ciphertext) value.
+// Exposed for callers that must skip an unusable token Load could not decrypt
+// (key unavailable), e.g. `auth status`.
+func IsEncrypted(v string) bool { return isEncrypted(v) }
+
 // encryptValue seals plaintext with AES-256-GCM and returns
 // enc:v1:<base64(nonce||ciphertext||tag)>. key must be 32 bytes.
 func encryptValue(key []byte, plaintext string) (string, error) {

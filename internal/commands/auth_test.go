@@ -2,11 +2,13 @@ package commands
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/howar31/slk/internal/api"
 	"github.com/howar31/slk/internal/auth"
 )
 
@@ -65,7 +67,7 @@ func TestAuthLogout_MissingProfileErrors(t *testing.T) {
 	// Seed an unrelated profile so the config file exists but does not
 	// contain the profile we attempt to remove.
 	set := newAuthCommand(&GlobalFlags{})
-	set.SetArgs([]string{"set-token", "--profile", "work", "--user", "xoxp-x", "--workspace", "acme"})
+	set.SetArgs([]string{"set-token", "--profile", "work", "--user", "xoxp-x"})
 	if err := set.Execute(); err != nil {
 		t.Fatalf("seed set-token: %v", err)
 	}
@@ -96,7 +98,7 @@ func TestAuthLogout_RemovesExisting(t *testing.T) {
 	t.Setenv("SLK_KEYRING_BACKEND", "file")
 
 	set := newAuthCommand(&GlobalFlags{})
-	set.SetArgs([]string{"set-token", "--profile", "dummy", "--user", "xoxp-d", "--workspace", "test"})
+	set.SetArgs([]string{"set-token", "--profile", "dummy", "--user", "xoxp-d"})
 	if err := set.Execute(); err != nil {
 		t.Fatalf("seed set-token: %v", err)
 	}
@@ -180,7 +182,7 @@ func TestSetToken_InteractiveFillsMissing(t *testing.T) {
 	}
 
 	set := newAuthCommand(&GlobalFlags{})
-	set.SetIn(strings.NewReader("work\nacme\n")) // profile, workspace
+	set.SetIn(strings.NewReader("work\n")) // profile
 	var out, errb bytes.Buffer
 	set.SetOut(&out)
 	set.SetErr(&errb)
@@ -194,7 +196,7 @@ func TestSetToken_InteractiveFillsMissing(t *testing.T) {
 		t.Fatalf("reload: %v", err)
 	}
 	p := cfg.Profiles["work"]
-	if p.UserToken != "xoxp-interactive" || p.Workspace != "acme" {
+	if p.UserToken != "xoxp-interactive" {
 		t.Fatalf("profile not filled from prompts: %+v", p)
 	}
 	if p.BotToken != "" {
@@ -220,7 +222,7 @@ func TestSetToken_InteractiveKeepsExistingToken(t *testing.T) {
 	readSecret = func(int) ([]byte, error) { return []byte(""), nil } // keep user, skip bot
 
 	upd := newAuthCommand(&GlobalFlags{})
-	upd.SetIn(strings.NewReader("work\nnewlabel\n"))
+	upd.SetIn(strings.NewReader("work\n"))
 	upd.SetArgs([]string{"set-token"})
 	if err := upd.Execute(); err != nil {
 		t.Fatalf("update: %v", err)
@@ -233,9 +235,6 @@ func TestSetToken_InteractiveKeepsExistingToken(t *testing.T) {
 	p := cfg.Profiles["work"]
 	if p.UserToken != "xoxp-orig" {
 		t.Fatalf("existing token should be kept: %+v", p)
-	}
-	if p.Workspace != "newlabel" {
-		t.Fatalf("workspace should update: %+v", p)
 	}
 }
 
@@ -257,7 +256,7 @@ func TestAuthSetTokenAndStatus(t *testing.T) {
 	t.Setenv("SLK_KEYRING_BACKEND", "file")
 
 	set := newAuthCommand(&GlobalFlags{})
-	set.SetArgs([]string{"set-token", "--profile", "work", "--user", "xoxp-x", "--workspace", "acme"})
+	set.SetArgs([]string{"set-token", "--profile", "work", "--user", "xoxp-x"})
 	if err := set.Execute(); err != nil {
 		t.Fatalf("set-token: %v", err)
 	}
@@ -270,7 +269,7 @@ func TestAuthSetTokenAndStatus(t *testing.T) {
 	status := newAuthCommand(&GlobalFlags{})
 	var out bytes.Buffer
 	status.SetOut(&out)
-	status.SetArgs([]string{"status"})
+	status.SetArgs([]string{"status", "--offline"})
 	if err := status.Execute(); err != nil {
 		t.Fatalf("status: %v", err)
 	}
@@ -295,6 +294,244 @@ func TestAuthSetTokenAndStatus(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "xoxp-x") {
 		t.Fatalf("config file leaked the plaintext token:\n%s", raw)
+	}
+}
+
+// seedProfile stores a user token for name via set-token. The first profile
+// seeded becomes the active one (set-token sets Active when it is empty).
+func seedProfile(t *testing.T, name, token string) {
+	t.Helper()
+	set := newAuthCommand(&GlobalFlags{})
+	set.SetArgs([]string{"set-token", "--profile", name, "--user", token})
+	if err := set.Execute(); err != nil {
+		t.Fatalf("seed %s: %v", name, err)
+	}
+}
+
+// runStatus runs `auth status` with args and returns combined stdout.
+func runStatus(t *testing.T, args ...string) string {
+	t.Helper()
+	status := newAuthCommand(&GlobalFlags{})
+	var out bytes.Buffer
+	status.SetOut(&out)
+	status.SetArgs(args)
+	if err := status.Execute(); err != nil {
+		t.Fatalf("status %v: %v", args, err)
+	}
+	return out.String()
+}
+
+func TestAuthStatus_FlagsRegistered(t *testing.T) {
+	cmd := newAuthCommand(&GlobalFlags{})
+	st, _, err := cmd.Find([]string{"status"})
+	if err != nil {
+		t.Fatalf("find status: %v", err)
+	}
+	for _, f := range []string{"all", "offline"} {
+		if st.Flags().Lookup(f) == nil {
+			t.Errorf("--%s flag not registered on status", f)
+		}
+	}
+}
+
+func TestAuthStatus_ChecksActiveByDefault(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "work", "xoxp-work")     // active
+	seedProfile(t, "personal", "xoxp-pers") // non-active
+
+	orig := liveIdentity
+	t.Cleanup(func() { liveIdentity = orig })
+	liveIdentity = func(token string) (string, error) { return "LIVE(" + token + ")", nil }
+
+	out := runStatus(t, "status")
+	if !strings.Contains(out, "LIVE(xoxp-work)") {
+		t.Fatalf("active profile should be live-checked: %q", out)
+	}
+	if strings.Contains(out, "LIVE(xoxp-pers)") {
+		t.Fatalf("non-active profile must not be checked by default: %q", out)
+	}
+}
+
+func TestAuthStatus_AllChecksEveryProfile(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "work", "xoxp-work")
+	seedProfile(t, "personal", "xoxp-pers")
+
+	orig := liveIdentity
+	t.Cleanup(func() { liveIdentity = orig })
+	liveIdentity = func(token string) (string, error) { return "LIVE(" + token + ")", nil }
+
+	out := runStatus(t, "status", "--all")
+	if !strings.Contains(out, "LIVE(xoxp-work)") || !strings.Contains(out, "LIVE(xoxp-pers)") {
+		t.Fatalf("--all should live-check every profile: %q", out)
+	}
+}
+
+func TestAuthStatus_OfflineSkipsCheck(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "work", "xoxp-work")
+
+	orig := liveIdentity
+	t.Cleanup(func() { liveIdentity = orig })
+	calls := 0
+	liveIdentity = func(token string) (string, error) { calls++; return "LIVE", nil }
+
+	out := runStatus(t, "status", "--offline")
+	if calls != 0 {
+		t.Fatalf("--offline must not call the live check, got %d calls", calls)
+	}
+	if strings.Contains(out, "LIVE") {
+		t.Fatalf("--offline output must stay local-only: %q", out)
+	}
+	if !strings.Contains(out, "work") {
+		t.Fatalf("--offline must still list profiles: %q", out)
+	}
+}
+
+func TestAuthStatus_NetworkDownNote(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "work", "xoxp-work")
+
+	orig := liveIdentity
+	t.Cleanup(func() { liveIdentity = orig })
+	liveIdentity = func(token string) (string, error) {
+		return "", errors.New("dial tcp: connection refused")
+	}
+
+	out := runStatus(t, "status")
+	if !strings.Contains(out, "offline") {
+		t.Fatalf("transport failure should render an offline note: %q", out)
+	}
+	if strings.Contains(out, "invalid") {
+		t.Fatalf("a network failure must not be reported as an invalid token: %q", out)
+	}
+}
+
+func TestAuthStatus_InvalidTokenNote(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "work", "xoxp-work")
+
+	orig := liveIdentity
+	t.Cleanup(func() { liveIdentity = orig })
+	liveIdentity = func(token string) (string, error) {
+		return "", &api.APIError{Method: "auth.test", SlackError: "invalid_auth"}
+	}
+
+	out := runStatus(t, "status")
+	if !strings.Contains(out, "invalid") || !strings.Contains(out, "invalid_auth") {
+		t.Fatalf("a rejected token should render an invalid-token note: %q", out)
+	}
+	if strings.Contains(out, "offline") {
+		t.Fatalf("a rejected token must not be reported as offline: %q", out)
+	}
+}
+
+func TestAuthStatus_UndecryptableTokenSkipsNetwork(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	// A config whose token is ciphertext but with no key file present: Load
+	// leaves it encrypted, so status cannot use it and must skip the network.
+	cfgData := `active = "work"
+key_backend = "file"
+
+[profiles.work]
+user_token = "enc:v1:unreadableciphertext"
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgData), 0o600); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+
+	orig := liveIdentity
+	t.Cleanup(func() { liveIdentity = orig })
+	calls := 0
+	liveIdentity = func(token string) (string, error) { calls++; return "LIVE", nil }
+
+	out := runStatus(t, "status")
+	if calls != 0 {
+		t.Fatalf("an undecryptable token must not reach the network, got %d calls", calls)
+	}
+	if !strings.Contains(out, "decrypt") {
+		t.Fatalf("an undecryptable token should render a local note: %q", out)
+	}
+}
+
+func TestAuthStatus_SortedByName(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "zebra", "xoxp-z")
+	seedProfile(t, "alpha", "xoxp-a")
+	seedProfile(t, "mango", "xoxp-m")
+
+	out := runStatus(t, "status", "--offline")
+	ia, im, iz := strings.Index(out, "alpha"), strings.Index(out, "mango"), strings.Index(out, "zebra")
+	if !(ia >= 0 && ia < im && im < iz) {
+		t.Fatalf("profiles must be listed in sorted (config.toml) order: %q", out)
+	}
+}
+
+func TestAuthStatus_EncryptionLineFirst(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "work", "xoxp-work")
+
+	out := runStatus(t, "status", "--offline")
+	if ie, iw := strings.Index(out, "encryption:"), strings.Index(out, "work"); !(ie >= 0 && ie < iw) {
+		t.Fatalf("encryption status should print before the profile list: %q", out)
+	}
+}
+
+func TestAuthStatus_HintsAllWhenProfilesUnchecked(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "work", "xoxp-work")
+	seedProfile(t, "personal", "xoxp-pers")
+
+	orig := liveIdentity
+	t.Cleanup(func() { liveIdentity = orig })
+	liveIdentity = func(token string) (string, error) { return "LIVE", nil }
+
+	out := runStatus(t, "status")
+	if !strings.Contains(out, "--all") {
+		t.Fatalf("with unchecked profiles, status should hint --all: %q", out)
+	}
+	// Blank line above, and the hint is not indented (it is not a list item).
+	if !strings.Contains(out, "\n\nRun with --all") {
+		t.Fatalf("the --all hint should be a blank-line-separated, unindented line: %q", out)
+	}
+}
+
+func TestAuthStatus_NoHintWhenNothingUnchecked(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	seedProfile(t, "work", "xoxp-work")     // single profile
+	seedProfile(t, "personal", "xoxp-pers") // second, for the --all case
+
+	orig := liveIdentity
+	t.Cleanup(func() { liveIdentity = orig })
+	liveIdentity = func(token string) (string, error) { return "LIVE", nil }
+
+	if out := runStatus(t, "status", "--all"); strings.Contains(out, "--all") {
+		t.Fatalf("--all verifies everything; no hint expected: %q", out)
+	}
+	if out := runStatus(t, "status", "--offline"); strings.Contains(out, "--all") {
+		t.Fatalf("--offline opted out of checks; no hint expected: %q", out)
 	}
 }
 
@@ -331,7 +568,7 @@ func TestAuthLogin_InteractivePromptsAndMints(t *testing.T) {
 	}
 
 	login := newAuthCommand(&GlobalFlags{})
-	login.SetIn(strings.NewReader("work\nacme\nCID123\n")) // profile, workspace, client-id
+	login.SetIn(strings.NewReader("work\nCID123\n")) // profile, client-id
 	var out, errb bytes.Buffer
 	login.SetOut(&out)
 	login.SetErr(&errb)
@@ -347,9 +584,6 @@ func TestAuthLogin_InteractivePromptsAndMints(t *testing.T) {
 	p := cfg.Profiles["work"]
 	if p.UserToken != "xoxp-minted" {
 		t.Fatalf("minted user token not stored: %+v", p)
-	}
-	if p.Workspace != "acme" {
-		t.Fatalf("workspace not stored: %+v", p)
 	}
 	if gotID != "CID123" || gotSecret != "csecret" {
 		t.Fatalf("exchange got id=%q secret=%q (want prompted values)", gotID, gotSecret)

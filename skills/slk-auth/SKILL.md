@@ -43,7 +43,6 @@ slk auth login [flags]
 | `--port` | — | `3000` | local callback port |
 | `--profile` | — | `default` | profile name |
 | `--scopes` | — | `channels:history,channels:read,channels:write,groups:history,groups:read,groups:write,im:history,im:read,im:write,mpim:history,mpim:read,mpim:write,chat:write,reactions:write,reactions:read,search:read,users:read,users:write,users.profile:read,users.profile:write,files:read,files:write,canvases:read,canvases:write,lists:read,lists:write,pins:read,pins:write,bookmarks:read,bookmarks:write,team:read,emoji:read,dnd:read,dnd:write,usergroups:read,usergroups:write` | comma-separated user scopes |
-| `--workspace` | — | — | workspace label |
 
 **Tips:** Run the OAuth flow with your own Slack app credentials. Pass values via flags for scripts/agents, or run with missing fields in a terminal to be prompted (the client secret is entered hidden).
 
@@ -84,7 +83,6 @@ slk auth set-token [flags]
 | `--non-interactive` | — | — | never prompt; require values via flags |
 | `--profile` | — | `default` | profile name |
 | `--user` | — | — | user token (xoxp-, or - to read stdin) |
-| `--workspace` | — | — | workspace label |
 
 **Tips:** Store tokens for a profile. Pass values via flags for scripts/agents, or run with missing fields in a terminal to be prompted (token entry is hidden). Use --user - / --bot - to read a token from stdin.
 
@@ -93,8 +91,15 @@ slk auth set-token [flags]
 Show configured profiles
 
 ```bash
-slk auth status
+slk auth status [flags]
 ```
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--all` | — | — | verify every profile live, not just the active one |
+| `--offline` | — | — | skip the live Slack check; list local info only |
+
+**Tips:** Show configured profiles. By default the active profile is verified live against Slack (auth.test); pass --all to verify every profile, or --offline to list local info only without any network call.
 
 ## slk auth switch
 

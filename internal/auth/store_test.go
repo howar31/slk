@@ -15,7 +15,7 @@ func TestStore_SaveLoadRoundTrip(t *testing.T) {
 	cfg := &Config{
 		Active: "work",
 		Profiles: map[string]Profile{
-			"work": {Workspace: "acme", UserToken: "xoxp-1", BotToken: "xoxb-1"},
+			"work": {UserToken: "xoxp-1", BotToken: "xoxb-1"},
 		},
 	}
 	if err := Save(path, cfg); err != nil {
@@ -115,6 +115,11 @@ bot_token = "xoxb-legacy"
 	}
 	if !strings.Contains(string(raw), `key_backend = "file"`) {
 		t.Fatalf("Save did not record key_backend:\n%s", raw)
+	}
+	// The legacy `workspace` key is no longer part of the schema: Load ignores it
+	// and Save must not write it back.
+	if strings.Contains(string(raw), "workspace") {
+		t.Fatalf("Save must drop the obsolete workspace key:\n%s", raw)
 	}
 
 	// The encrypted form still resolves to the original values.

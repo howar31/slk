@@ -148,7 +148,7 @@ go build -o slk ./cmd/slk   # version is read from the committed VERSION file
 slk --version
 
 # Store your token (see Authentication for how to obtain one)
-slk auth set-token --profile work --workspace acme --user xoxp-...
+slk auth set-token --profile work --user xoxp-...
 
 # Read the last 5 messages of a channel
 slk msg read --channel C0123456789 --limit 5
@@ -165,8 +165,9 @@ The token in the second Quick start command comes from the
 
 ## Authentication
 
-`slk` walks the standard Slack OAuth flow using **your own** Slack app — slk does not embed a
-client secret.
+`slk` authenticates with **your own** Slack app — it does not embed a client secret. Create the
+app once (steps 1–2), then get a token into `slk` by **either** pasting one **or** running the
+OAuth flow (step 3); both are first-class and either works for a single user.
 
 ### 1. Create your Slack app
 
@@ -244,29 +245,35 @@ To change scopes on an app you already created, open **Features → App Manifest
 settings, edit the `user:` list there, and **Save Changes** — Slack applies the diff and
 prompts you to reinstall if you added new scopes.
 
-### 3. Install to your workspace, copy the token
+### 3. Get a token into `slk`
+
+Two ways — pick one. Both store the same kind of per-user `xoxp-` token; the OAuth flow is also
+how a team shares one app (see [Team setup](#team-setup)).
+
+- **Method A — paste a token** (simplest): install the app, copy its token, paste it in. No
+  client secret, no redirect URL.
+- **Method B — OAuth flow (`slk auth login`)**: `slk` mints the token through your browser, so
+  you never copy a raw token by hand.
+
+#### Method A — paste a token
 
 On the **OAuth & Permissions** page (the same one as step 2), scroll to the top and click
 **Install to Workspace**. Approve the prompt; the **User OAuth Token** (`xoxp-…`) then appears
 at the top of that page — copy it. Some workspaces require an admin to approve the install.
 
-### 4. Store the token in `slk`
-
-Run it in a terminal with no arguments — `slk` asks for each field and hides the token as you
-paste it, so nothing lands in your shell history:
+Then store it. Run it in a terminal with no arguments — `slk` asks for each field and hides the
+token as you paste it, so nothing lands in your shell history:
 
 ```bash
 slk auth set-token
 ```
 
-It prompts for four things:
+It prompts for three things:
 
 - **`Profile name [default]:`** — a label for this set of credentials, so you can keep more
   than one (e.g. `work`, `personal`) and switch between them with `slk auth switch <name>`.
   Press Enter to accept `default`.
-- **`Workspace label (optional):`** — a human-readable note for which workspace this is
-  (e.g. `acme`). Cosmetic only; press Enter to skip.
-- **`Paste user token (xoxp-, hidden):`** — the **User OAuth Token** you copied in step 3.
+- **`Paste user token (xoxp-, hidden):`** — the **User OAuth Token** you just copied.
   Input is hidden; paste it and press Enter.
 - **`Paste bot token (xoxb-, optional, hidden):`** — only if you also use a bot token
   (`xoxb-`); most users press Enter to skip.
@@ -275,22 +282,42 @@ Scripting it instead? Pass values as flags (`slk auth set-token --help`), and us
 to read the token from stdin so it stays out of history:
 `printf '%s' "$TOKEN" | slk auth set-token --profile work --user -`.
 
-Tokens land in `~/.config/slk/config.toml` (mode `0600`) and are encrypted at rest (see
-[Credential storage](#credential-storage)). `slk` never prints token contents; `slk auth
-status` shows presence booleans only.
+#### Method B — OAuth flow (`slk auth login`)
 
-### 5. Verify it worked
+1. **OAuth & Permissions → Redirect URLs**: add `http://localhost:3000/callback` (the port
+   `slk auth login` listens on; override with `--port`), and **Install to Workspace** if you
+   have not already.
+2. Copy the **Client ID** and **Client Secret** from **Basic Information → App Credentials**.
+3. Run the flow:
 
 ```bash
-slk auth status   # stored locally? lists the profile with user=true + decryption health
-slk auth test     # valid on Slack? prints your live team and user identity
+slk auth login --client-id <id> --client-secret <secret>
 ```
 
-`slk auth status` shows each profile as `<name> (workspace=… user=true bot=false)` plus the
-encryption backend — it never prints the token itself. `slk auth test` calls Slack's
-`auth.test` and, on success, prints `<team> (<team_id>) — <user> (<user_id>) @ <url>`. A bad
-token returns an auth error (`invalid_auth` / `not_authed`) and exits `3` — re-check the
-token and redo step 4.
+`slk` prints an authorize URL and starts a local listener; open the URL, approve, and `slk`
+exchanges the code for your own `xoxp-` token and stores it. The client secret is used only for
+that exchange and is **never** persisted. Run with no arguments in a terminal to be prompted for
+each field instead (the client secret is entered hidden).
+
+Either way, the token lands in `~/.config/slk/config.toml` (mode `0600`) and is encrypted at
+rest (see [Credential storage](#credential-storage)). `slk` never prints token contents.
+
+### 4. Verify it worked
+
+```bash
+slk auth status   # lists profiles + verifies the active one live against Slack
+slk auth test     # explicit live check of the active token
+```
+
+`slk auth status` lists each profile as `<name> (user=true bot=false)` plus the encryption
+backend, and verifies the **active** profile live against Slack — appending its identity
+(`<team> (<team_id>) — <user> (<user_id>) @ <url>`) on success, `(invalid token: …)` if Slack
+rejects it, or `(offline: …)` if Slack is unreachable. Pass `--all` to verify every profile, or
+`--offline` to skip the network and list local info only. It never prints the token itself.
+
+`slk auth test` is the explicit single-token check: it calls Slack's `auth.test` and prints the
+same identity line. A bad token returns an auth error (`invalid_auth` / `not_authed`) and exits
+`3` — re-check the token and redo step 3.
 
 ### Credential storage
 
@@ -566,11 +593,12 @@ Each teammate runs the OAuth flow with the shared app credentials to mint their 
 slk auth login --client-id <id> --client-secret <secret>
 ```
 
-This **prints an authorize URL** and starts a local listener on `localhost:3000` (the
-`--port`). Open the printed URL in a browser and approve; Slack redirects back to that listener
-with a code, which `slk` exchanges and stores as the teammate's own `xoxp-` token (encrypted at
-rest). The listener waits ~5 minutes, then times out. Verify with `slk auth status` /
-`slk auth test` — see [Authentication](#authentication) step 5.
+This is exactly [Authentication](#authentication) **Method B** — it prints an authorize URL and
+starts a local listener on `localhost:3000` (the `--port`). Open the printed URL in a browser and
+approve; Slack redirects back to that listener with a code, which `slk` exchanges and stores as
+the teammate's own `xoxp-` token (encrypted at rest). The listener waits ~5 minutes, then times
+out. Verify with `slk auth status` / `slk auth test` — see [Authentication](#authentication)
+step 4.
 
 ## Development
 

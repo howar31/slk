@@ -2,11 +2,15 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
+	"sort"
+	"time"
 
+	"github.com/howar31/slk/internal/api"
 	"github.com/howar31/slk/internal/auth"
 	"github.com/spf13/cobra"
 )
@@ -123,6 +127,47 @@ var (
 	exchangeCode = auth.ExchangeCode
 )
 
+// liveIdentity calls auth.test for token and returns the formatted identity line
+// for `auth status`. Seam: overridable in tests so status runs without a live
+// token or network. On failure it returns the error unchanged — an *api.APIError
+// when Slack rejected the call, any other error for transport/offline failures —
+// so the caller can classify it.
+var liveIdentity = func(token string) (string, error) {
+	c := api.New(token)
+	c.HTTP.Timeout = 4 * time.Second
+	raw, err := c.Call("auth.test", nil, nil)
+	if err != nil {
+		return "", err
+	}
+	return formatAuthIdentity(raw)
+}
+
+// identitySuffix renders the live-check fragment for one profile in `auth status`:
+// the resolved identity on success, or a classified note. It never reaches the
+// network for a token Load could not decrypt. A Slack rejection (*api.APIError)
+// reads as an invalid token; any other error reads as offline.
+func identitySuffix(p auth.Profile) string {
+	token := p.UserToken
+	if token == "" {
+		token = p.BotToken
+	}
+	if token == "" {
+		return "(no token)"
+	}
+	if auth.IsEncrypted(token) {
+		return "(local: token could not be decrypted)"
+	}
+	line, err := liveIdentity(token)
+	if err != nil {
+		var apiErr *api.APIError
+		if errors.As(err, &apiErr) {
+			return fmt.Sprintf("(invalid token: %s)", apiErr.SlackError)
+		}
+		return "(offline: could not reach Slack)"
+	}
+	return line
+}
+
 // promptCtx bundles the I/O and interactivity state the auth commands resolve their
 // fields against, so set-token and login share one resolution path.
 type promptCtx struct {
@@ -163,7 +208,7 @@ func (pc promptCtx) secret(flagVal string, changed, required bool, prompt string
 }
 
 func newAuthSetTokenCommand() *cobra.Command {
-	var profile, workspace, userToken, botToken string
+	var profile, userToken, botToken string
 	var nonInteractive bool
 	cmd := &cobra.Command{
 		Use:   "set-token",
@@ -188,14 +233,6 @@ func newAuthSetTokenCommand() *cobra.Command {
 				return err
 			}
 			p, existed := cfg.Profiles[name]
-
-			ws, err := pc.line(workspace, flags.Changed("workspace"), "Workspace label (optional): ")
-			if err != nil {
-				return err
-			}
-			if ws != "" {
-				p.Workspace = ws
-			}
 
 			// A new profile must end up with a token; an existing one may keep its current.
 			ut, err := pc.secret(userToken, flags.Changed("user"), !existed, "Paste user token (xoxp-, hidden): ")
@@ -230,7 +267,6 @@ func newAuthSetTokenCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&profile, "profile", "default", "profile name")
-	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace label")
 	cmd.Flags().StringVar(&userToken, "user", "", "user token (xoxp-, or - to read stdin)")
 	cmd.Flags().StringVar(&botToken, "bot", "", "bot token (xoxb-, or - to read stdin)")
 	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "never prompt; require values via flags")
@@ -238,9 +274,13 @@ func newAuthSetTokenCommand() *cobra.Command {
 }
 
 func newAuthStatusCommand() *cobra.Command {
-	return &cobra.Command{
+	var all, offline bool
+	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show configured profiles",
+		Long: "Show configured profiles. By default the active profile is verified live " +
+			"against Slack (auth.test); pass --all to verify every profile, or --offline to " +
+			"list local info only without any network call.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, cfg, err := loadConfig()
 			if err != nil {
@@ -250,18 +290,49 @@ func newAuthStatusCommand() *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), "no profiles configured")
 				return nil
 			}
-			for name, p := range cfg.Profiles {
+
+			// Encryption is a config-wide property (one key backend, one health
+			// line for the whole file), so it leads — separated from the per-profile
+			// table below.
+			fmt.Fprintln(cmd.OutOrStdout(), auth.EncryptionStatus(cfg))
+			fmt.Fprintln(cmd.OutOrStdout())
+
+			// Sort by name for a stable order (BurntSushi also writes profiles
+			// alphabetically, so this matches config.toml). Pad names to align the
+			// columns.
+			names := make([]string, 0, len(cfg.Profiles))
+			width := 0
+			for name := range cfg.Profiles {
+				names = append(names, name)
+				if len(name) > width {
+					width = len(name)
+				}
+			}
+			sort.Strings(names)
+
+			for _, name := range names {
+				p := cfg.Profiles[name]
 				marker := " "
 				if name == cfg.Active {
 					marker = "*"
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%s %s (workspace=%s user=%v bot=%v)\n",
-					marker, name, p.Workspace, p.UserToken != "", p.BotToken != "")
+				line := fmt.Sprintf("%s %-*s (user=%v bot=%v)",
+					marker, width, name, p.UserToken != "", p.BotToken != "")
+				if !offline && (all || name == cfg.Active) {
+					line += " — " + identitySuffix(p)
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), line)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), auth.EncryptionStatus(cfg))
+			if !offline && !all && len(names) > 1 {
+				fmt.Fprintln(cmd.OutOrStdout())
+				fmt.Fprintln(cmd.OutOrStdout(), "Run with --all to verify every profile, not just the active one.")
+			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&all, "all", false, "verify every profile live, not just the active one")
+	cmd.Flags().BoolVar(&offline, "offline", false, "skip the live Slack check; list local info only")
+	return cmd
 }
 
 func newAuthSwitchCommand() *cobra.Command {
@@ -314,7 +385,7 @@ func newAuthLogoutCommand() *cobra.Command {
 }
 
 func newAuthLoginCommand() *cobra.Command {
-	var profile, workspace, clientID, clientSecret, scopes, port string
+	var profile, clientID, clientSecret, scopes, port string
 	var nonInteractive bool
 	cmd := &cobra.Command{
 		Use:   "login",
@@ -332,11 +403,6 @@ func newAuthLoginCommand() *cobra.Command {
 			}
 			if name == "" {
 				name = "default"
-			}
-
-			ws, err := pc.line(workspace, flags.Changed("workspace"), "Workspace label (optional): ")
-			if err != nil {
-				return err
 			}
 
 			id, err := pc.line(clientID, flags.Changed("client-id"), "Client ID: ")
@@ -375,9 +441,6 @@ func newAuthLoginCommand() *cobra.Command {
 				return err
 			}
 			p := cfg.Profiles[name]
-			if ws != "" {
-				p.Workspace = ws
-			}
 			if pair.UserToken != "" {
 				p.UserToken = pair.UserToken
 			}
@@ -399,7 +462,6 @@ func newAuthLoginCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&profile, "profile", "default", "profile name")
-	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace label")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "your Slack app client ID")
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "your Slack app client secret")
 	cmd.Flags().StringVar(&scopes, "scopes", "channels:history,channels:read,channels:write,groups:history,groups:read,groups:write,im:history,im:read,im:write,mpim:history,mpim:read,mpim:write,chat:write,reactions:write,reactions:read,search:read,users:read,users:write,users.profile:read,users.profile:write,files:read,files:write,canvases:read,canvases:write,lists:read,lists:write,pins:read,pins:write,bookmarks:read,bookmarks:write,team:read,emoji:read,dnd:read,dnd:write,usergroups:read,usergroups:write", "comma-separated user scopes")
