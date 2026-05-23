@@ -37,12 +37,15 @@ slk auth login [flags]
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--client-id` | ✓ | — | your Slack app client ID |
-| `--client-secret` | ✓ | — | your Slack app client secret |
+| `--client-id` | — | — | your Slack app client ID |
+| `--client-secret` | — | — | your Slack app client secret |
+| `--non-interactive` | — | — | never prompt; require values via flags |
 | `--port` | — | `3000` | local callback port |
 | `--profile` | — | `default` | profile name |
 | `--scopes` | — | `channels:history,channels:read,channels:write,groups:history,groups:read,groups:write,im:history,im:read,im:write,mpim:history,mpim:read,mpim:write,chat:write,reactions:write,reactions:read,search:read,users:read,users:write,users.profile:read,users.profile:write,files:read,files:write,canvases:read,canvases:write,lists:read,lists:write,pins:read,pins:write,bookmarks:read,bookmarks:write,team:read,emoji:read,dnd:read,dnd:write,usergroups:read,usergroups:write` | comma-separated user scopes |
 | `--workspace` | — | — | workspace label |
+
+**Tips:** Run the OAuth flow with your own Slack app credentials. Pass values via flags for scripts/agents, or run with missing fields in a terminal to be prompted (the client secret is entered hidden).
 
 ## slk auth logout
 

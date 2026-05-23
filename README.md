@@ -294,11 +294,12 @@ token and redo step 4.
 
 ### Credential storage
 
-The `user_token`, `bot_token`, and `client_secret` fields are encrypted at rest with
-AES-256-GCM. Tokens you add with `slk auth set-token` or `slk auth login` are encrypted on
-write; an existing plaintext value (for example one you hand-edited into the file) keeps
-working and is encrypted the next time `slk` writes the config — no re-authentication is ever
-required.
+The `user_token` and `bot_token` fields are encrypted at rest with AES-256-GCM. Tokens you
+add with `slk auth set-token` or `slk auth login` are encrypted on write; an existing
+plaintext value (for example one you hand-edited into the file) keeps working and is encrypted
+the next time `slk` writes the config — no re-authentication is ever required. `slk` does
+**not** persist the OAuth `client_id` / `client_secret`: `auth login` uses them only
+transiently for the token exchange, never writing them to the config.
 
 The 32-byte encryption key is held in one of two backends, selected by the
 `SLK_KEYRING_BACKEND` environment variable:

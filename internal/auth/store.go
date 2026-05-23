@@ -10,15 +10,14 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Profile holds credentials for one Slack workspace. The token and secret
-// fields are stored encrypted at rest (see crypto.go); they are plaintext in
-// memory after Load and re-encrypted by Save.
+// Profile holds credentials for one Slack workspace. The token fields are stored
+// encrypted at rest (see crypto.go); they are plaintext in memory after Load and
+// re-encrypted by Save. slk does not persist the OAuth client id/secret — they are
+// used only transiently during `auth login`.
 type Profile struct {
-	Workspace    string `toml:"workspace"`
-	UserToken    string `toml:"user_token,omitempty"`
-	BotToken     string `toml:"bot_token,omitempty"`
-	ClientID     string `toml:"client_id,omitempty"`
-	ClientSecret string `toml:"client_secret,omitempty"`
+	Workspace string `toml:"workspace"`
+	UserToken string `toml:"user_token,omitempty"`
+	BotToken  string `toml:"bot_token,omitempty"`
 }
 
 // Config is the on-disk slk configuration. KeyBackend records which backend
@@ -89,7 +88,7 @@ func decryptInPlace(cfg *Config, path string) {
 
 	for name, p := range cfg.Profiles {
 		changed := false
-		for _, f := range []*string{&p.UserToken, &p.BotToken, &p.ClientSecret} {
+		for _, f := range []*string{&p.UserToken, &p.BotToken} {
 			if *f == "" || !isEncrypted(*f) {
 				continue
 			}
@@ -132,7 +131,7 @@ func Save(path string, cfg *Config) error {
 // encryptProfile returns a copy of p with each non-empty, not-already-encrypted
 // sensitive field encrypted.
 func encryptProfile(key []byte, p Profile) (Profile, error) {
-	for _, f := range []*string{&p.UserToken, &p.BotToken, &p.ClientSecret} {
+	for _, f := range []*string{&p.UserToken, &p.BotToken} {
 		if *f == "" || isEncrypted(*f) {
 			continue
 		}

@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 
@@ -115,6 +116,52 @@ func loadConfig() (string, *auth.Config, error) {
 	return path, cfg, err
 }
 
+// OAuth flow seams — overridable in tests so login can run without a real browser
+// callback or a live Slack token exchange.
+var (
+	waitForCode  = auth.WaitForCode
+	exchangeCode = auth.ExchangeCode
+)
+
+// promptCtx bundles the I/O and interactivity state the auth commands resolve their
+// fields against, so set-token and login share one resolution path.
+type promptCtx struct {
+	in          io.Reader
+	errw        io.Writer
+	fd          int
+	interactive bool
+}
+
+// newPromptCtx derives the prompt context from a command. interactive is true only
+// when not forced off and stdin is a terminal; fd comes from the input reader when it
+// is an *os.File, otherwise os.Stdin.
+func newPromptCtx(cmd *cobra.Command, nonInteractive bool) promptCtx {
+	in := cmd.InOrStdin()
+	// Derive fd from the input reader itself. A non-*os.File reader gets fd -1 so it
+	// never borrows os.Stdin's terminal status (isTerminal(-1) is false), which keeps a
+	// redirected/in-memory input from being mistaken for an interactive terminal.
+	fd := -1
+	if f, ok := in.(*os.File); ok {
+		fd = int(f.Fd())
+	}
+	return promptCtx{
+		in:          in,
+		errw:        cmd.ErrOrStderr(),
+		fd:          fd,
+		interactive: !nonInteractive && isTerminal(fd),
+	}
+}
+
+// line resolves a non-secret field (flag → prompt-if-TTY → empty).
+func (pc promptCtx) line(flagVal string, changed bool, prompt string) (string, error) {
+	return resolveLine(pc.in, pc.errw, flagVal, changed, pc.interactive, prompt)
+}
+
+// secret resolves a hidden field (flag/"-" stdin → hidden prompt-if-TTY → empty).
+func (pc promptCtx) secret(flagVal string, changed, required bool, prompt string) (string, error) {
+	return resolveSecret(pc.in, pc.errw, pc.fd, flagVal, changed, pc.interactive, required, prompt)
+}
+
 func newAuthSetTokenCommand() *cobra.Command {
 	var profile, workspace, userToken, botToken string
 	var nonInteractive bool
@@ -125,16 +172,10 @@ func newAuthSetTokenCommand() *cobra.Command {
 			"with missing fields in a terminal to be prompted (token entry is hidden). Use " +
 			"--user - / --bot - to read a token from stdin.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			in := cmd.InOrStdin()
-			fd := int(os.Stdin.Fd())
-			if f, ok := in.(*os.File); ok {
-				fd = int(f.Fd())
-			}
-			interactive := !nonInteractive && isTerminal(fd)
-			errw := cmd.ErrOrStderr()
+			pc := newPromptCtx(cmd, nonInteractive)
 			flags := cmd.Flags()
 
-			name, err := resolveLine(in, errw, profile, flags.Changed("profile"), interactive, "Profile name [default]: ")
+			name, err := pc.line(profile, flags.Changed("profile"), "Profile name [default]: ")
 			if err != nil {
 				return err
 			}
@@ -148,7 +189,7 @@ func newAuthSetTokenCommand() *cobra.Command {
 			}
 			p, existed := cfg.Profiles[name]
 
-			ws, err := resolveLine(in, errw, workspace, flags.Changed("workspace"), interactive, "Workspace label (optional): ")
+			ws, err := pc.line(workspace, flags.Changed("workspace"), "Workspace label (optional): ")
 			if err != nil {
 				return err
 			}
@@ -157,7 +198,7 @@ func newAuthSetTokenCommand() *cobra.Command {
 			}
 
 			// A new profile must end up with a token; an existing one may keep its current.
-			ut, err := resolveSecret(in, errw, fd, userToken, flags.Changed("user"), interactive, !existed, "Paste user token (xoxp-, hidden): ")
+			ut, err := pc.secret(userToken, flags.Changed("user"), !existed, "Paste user token (xoxp-, hidden): ")
 			if err != nil {
 				return err
 			}
@@ -165,7 +206,7 @@ func newAuthSetTokenCommand() *cobra.Command {
 				p.UserToken = ut
 			}
 
-			bt, err := resolveSecret(in, errw, fd, botToken, flags.Changed("bot"), interactive, false, "Paste bot token (xoxb-, optional, hidden): ")
+			bt, err := pc.secret(botToken, flags.Changed("bot"), false, "Paste bot token (xoxb-, optional, hidden): ")
 			if err != nil {
 				return err
 			}
@@ -274,52 +315,86 @@ func newAuthLogoutCommand() *cobra.Command {
 
 func newAuthLoginCommand() *cobra.Command {
 	var profile, workspace, clientID, clientSecret, scopes, port string
+	var nonInteractive bool
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Run the OAuth flow with your own Slack app credentials",
+		Long: "Run the OAuth flow with your own Slack app credentials. Pass values via flags " +
+			"for scripts/agents, or run with missing fields in a terminal to be prompted (the " +
+			"client secret is entered hidden).",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			pc := newPromptCtx(cmd, nonInteractive)
+			flags := cmd.Flags()
+
+			name, err := pc.line(profile, flags.Changed("profile"), "Profile name [default]: ")
+			if err != nil {
+				return err
+			}
+			if name == "" {
+				name = "default"
+			}
+
+			ws, err := pc.line(workspace, flags.Changed("workspace"), "Workspace label (optional): ")
+			if err != nil {
+				return err
+			}
+
+			id, err := pc.line(clientID, flags.Changed("client-id"), "Client ID: ")
+			if err != nil {
+				return err
+			}
+			secret, err := pc.secret(clientSecret, flags.Changed("client-secret"), false, "Client secret (hidden): ")
+			if err != nil {
+				return err
+			}
+			if id == "" || secret == "" {
+				return fmt.Errorf("client id and secret are required; pass --client-id and --client-secret, or run in a terminal")
+			}
+
 			redirectURI := "http://localhost:" + port + "/callback"
 			q := url.Values{
-				"client_id":    {clientID},
+				"client_id":    {id},
 				"user_scope":   {scopes},
 				"redirect_uri": {redirectURI},
 			}
 			authURL := "https://slack.com/oauth/v2/authorize?" + q.Encode()
 			fmt.Fprintf(cmd.OutOrStdout(), "Open this URL to authorize:\n%s\n", authURL)
 
-			code, err := auth.WaitForCode(":"+port, "/callback")
+			code, err := waitForCode(":"+port, "/callback")
 			if err != nil {
 				return err
 			}
-			pair, err := auth.ExchangeCode("https://slack.com/api/oauth.v2.access",
-				clientID, clientSecret, code, redirectURI)
+			pair, err := exchangeCode("https://slack.com/api/oauth.v2.access",
+				id, secret, code, redirectURI)
 			if err != nil {
 				return err
 			}
+
 			path, cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
-			p := cfg.Profiles[profile]
-			if workspace != "" {
-				p.Workspace = workspace
+			p := cfg.Profiles[name]
+			if ws != "" {
+				p.Workspace = ws
 			}
-			p.ClientID = clientID
-			p.ClientSecret = clientSecret
 			if pair.UserToken != "" {
 				p.UserToken = pair.UserToken
 			}
 			if pair.BotToken != "" {
 				p.BotToken = pair.BotToken
 			}
-			cfg.Profiles[profile] = p
+			cfg.Profiles[name] = p
 			if cfg.Active == "" {
-				cfg.Active = profile
+				cfg.Active = name
 			}
 			if err := auth.Save(path, cfg); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "authorized profile %q\n", profile)
+			fmt.Fprintf(cmd.OutOrStdout(), "authorized profile %q\n", name)
+			if !pc.interactive && !flags.Changed("profile") {
+				fmt.Fprintln(cmd.ErrOrStderr(), "  (saved to the default profile; pass --profile to choose another)")
+			}
 			return nil
 		},
 	}
@@ -329,7 +404,6 @@ func newAuthLoginCommand() *cobra.Command {
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "your Slack app client secret")
 	cmd.Flags().StringVar(&scopes, "scopes", "channels:history,channels:read,channels:write,groups:history,groups:read,groups:write,im:history,im:read,im:write,mpim:history,mpim:read,mpim:write,chat:write,reactions:write,reactions:read,search:read,users:read,users:write,users.profile:read,users.profile:write,files:read,files:write,canvases:read,canvases:write,lists:read,lists:write,pins:read,pins:write,bookmarks:read,bookmarks:write,team:read,emoji:read,dnd:read,dnd:write,usergroups:read,usergroups:write", "comma-separated user scopes")
 	cmd.Flags().StringVar(&port, "port", "3000", "local callback port")
-	cmd.MarkFlagRequired("client-id")
-	cmd.MarkFlagRequired("client-secret")
+	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "never prompt; require values via flags")
 	return cmd
 }
