@@ -119,3 +119,95 @@ func TestCanvasRead_WithSectionsFlag(t *testing.T) {
 		t.Fatal("missing --with-sections")
 	}
 }
+
+// TestCanvasNewVerbs_FlagRegistration verifies that delete, share, and unshare
+// expose exactly the required flags.
+func TestCanvasNewVerbs_FlagRegistration(t *testing.T) {
+	g := &GlobalFlags{}
+	cases := []struct {
+		verb          string
+		requiredFlags []string
+		optionalFlags []string
+	}{
+		{
+			verb:          "delete",
+			requiredFlags: []string{"id"},
+		},
+		{
+			verb:          "share",
+			requiredFlags: []string{"id", "access-level"},
+			optionalFlags: []string{"users", "channels"},
+		},
+		{
+			verb:          "unshare",
+			requiredFlags: []string{"id"},
+			optionalFlags: []string{"users", "channels"},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.verb, func(t *testing.T) {
+			cmd := newCanvasCommand(g)
+			sub, _, err := cmd.Find([]string{tc.verb})
+			if err != nil || sub == nil || sub.Name() != tc.verb {
+				t.Fatalf("subcommand %q not found: %v", tc.verb, err)
+			}
+			for _, f := range tc.requiredFlags {
+				if sub.Flags().Lookup(f) == nil {
+					t.Errorf("missing required flag --%s", f)
+				}
+			}
+			for _, f := range tc.optionalFlags {
+				if sub.Flags().Lookup(f) == nil {
+					t.Errorf("missing optional flag --%s", f)
+				}
+			}
+		})
+	}
+}
+
+// TestCanvasNewVerbs_DryRun verifies that each new write verb prints the
+// expected Slack method name in dry-run mode and returns no error.
+func TestCanvasNewVerbs_DryRun(t *testing.T) {
+	cases := []struct {
+		args       []string
+		wantMethod string
+	}{
+		{
+			args:       []string{"delete", "--id", "F01234567"},
+			wantMethod: "canvases.delete",
+		},
+		{
+			args:       []string{"share", "--id", "F01234567", "--access-level", "read", "--users", "U0123456789"},
+			wantMethod: "canvases.access.set",
+		},
+		{
+			args:       []string{"share", "--id", "F01234567", "--access-level", "write", "--channels", "C0123456789"},
+			wantMethod: "canvases.access.set",
+		},
+		{
+			args:       []string{"unshare", "--id", "F01234567", "--users", "U0123456789"},
+			wantMethod: "canvases.access.delete",
+		},
+		{
+			args:       []string{"unshare", "--id", "F01234567", "--channels", "C0123456789"},
+			wantMethod: "canvases.access.delete",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
+			g := &GlobalFlags{DryRun: true}
+			cmd := newCanvasCommand(g)
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetArgs(tc.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute %v: %v", tc.args, err)
+			}
+			if !strings.Contains(out.String(), tc.wantMethod) {
+				t.Errorf("args %v: want method %q in output %q", tc.args, tc.wantMethod, out.String())
+			}
+		})
+	}
+}

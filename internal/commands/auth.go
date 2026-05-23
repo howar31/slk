@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -16,8 +17,92 @@ func newAuthCommand(g *GlobalFlags) *cobra.Command {
 		newAuthLoginCommand(),
 		newAuthSwitchCommand(),
 		newAuthLogoutCommand(),
+		newAuthTestCommand(g),
+		newAuthRevokeCommand(g),
 	)
 	return cmd
+}
+
+func newAuthTestCommand(g *GlobalFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:         "test",
+		Short:       "Verify the active token and show its live identity",
+		Annotations: map[string]string{"slackMethod": "auth.test"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("auth.test", nil, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			line, err := formatAuthIdentity(raw)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), line)
+			return nil
+		},
+	}
+}
+
+// formatAuthIdentity renders an auth.test response as a single
+// "team (team_id) — user (user_id) @ url" line.
+func formatAuthIdentity(raw []byte) (string, error) {
+	var resp struct {
+		URL    string `json:"url"`
+		Team   string `json:"team"`
+		User   string `json:"user"`
+		TeamID string `json:"team_id"`
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s (%s) — %s (%s) @ %s",
+		resp.Team, resp.TeamID, resp.User, resp.UserID, resp.URL), nil
+}
+
+func newAuthRevokeCommand(g *GlobalFlags) *cobra.Command {
+	return &cobra.Command{
+		Use:   "revoke",
+		Short: "Revoke the active token at Slack (server-side)",
+		Annotations: map[string]string{
+			"slackMethod": "auth.revoke",
+			"write":       "true",
+		},
+		Long: "Revoke the active token at Slack. This invalidates the token server-side; " +
+			"it does not remove the local profile (use `auth logout` for that).",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if g.DryRun {
+				fmt.Fprintln(cmd.OutOrStdout(), "[dry-run] auth.revoke")
+				return nil
+			}
+			client, err := buildClient(g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("auth.revoke", nil, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			var resp struct {
+				Revoked bool `json:"revoked"`
+			}
+			_ = json.Unmarshal(raw, &resp)
+			fmt.Fprintf(cmd.OutOrStdout(), "revoked=%v\n", resp.Revoked)
+			return nil
+		},
+	}
 }
 
 func loadConfig() (string, *auth.Config, error) {
@@ -198,7 +283,7 @@ func newAuthLoginCommand() *cobra.Command {
 	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace label")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "your Slack app client ID")
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "your Slack app client secret")
-	cmd.Flags().StringVar(&scopes, "scopes", "channels:history,channels:read,channels:write,groups:history,groups:read,groups:write,im:history,im:read,im:write,mpim:history,mpim:read,mpim:write,chat:write,reactions:write,search:read,users:read,users.profile:read,files:read,canvases:read,canvases:write,lists:read,lists:write", "comma-separated user scopes")
+	cmd.Flags().StringVar(&scopes, "scopes", "channels:history,channels:read,channels:write,groups:history,groups:read,groups:write,im:history,im:read,im:write,mpim:history,mpim:read,mpim:write,chat:write,reactions:write,reactions:read,search:read,users:read,users:write,users.profile:read,users.profile:write,files:read,files:write,canvases:read,canvases:write,lists:read,lists:write,pins:read,pins:write,bookmarks:read,bookmarks:write,team:read,emoji:read,dnd:read,dnd:write,usergroups:read,usergroups:write", "comma-separated user scopes")
 	cmd.Flags().StringVar(&port, "port", "3000", "local callback port")
 	cmd.MarkFlagRequired("client-id")
 	cmd.MarkFlagRequired("client-secret")

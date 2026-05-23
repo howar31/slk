@@ -178,7 +178,11 @@ func TestInjectRowID(t *testing.T) {
 
 func TestListCommand_HasSubcommands(t *testing.T) {
 	cmd := newListCommand(&GlobalFlags{})
-	want := map[string]bool{"create": false, "read": false, "add-item": false, "update-item": false}
+	want := map[string]bool{
+		"create": false, "read": false,
+		"add-item": false, "update-item": false,
+		"delete-item": false, "update": false,
+	}
 	for _, sub := range cmd.Commands() {
 		want[sub.Name()] = true
 	}
@@ -186,5 +190,118 @@ func TestListCommand_HasSubcommands(t *testing.T) {
 		if !found {
 			t.Errorf("missing list subcommand %q", name)
 		}
+	}
+}
+
+func TestListDeleteItem_FlagsRegistered(t *testing.T) {
+	cmd := newListCommand(&GlobalFlags{})
+	sub, _, err := cmd.Find([]string{"delete-item"})
+	if err != nil {
+		t.Fatalf("find delete-item: %v", err)
+	}
+	for _, name := range []string{"id", "row-id"} {
+		if sub.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag --%s on list delete-item", name)
+		}
+	}
+	// Both --id and --row-id must be required.
+	required := map[string]bool{}
+	sub.Flags().VisitAll(func(f *pflag.Flag) {
+		if v, _ := f.Annotations[cobra.BashCompOneRequiredFlag]; len(v) > 0 && v[0] == "true" {
+			required[f.Name] = true
+		}
+	})
+	for _, name := range []string{"id", "row-id"} {
+		if !required[name] {
+			t.Errorf("--%s must be required on list delete-item", name)
+		}
+	}
+}
+
+func TestListDeleteItem_DryRun(t *testing.T) {
+	g := &GlobalFlags{DryRun: true}
+	cmd := newListCommand(g)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"delete-item", "--id", "F01234567", "--row-id", "R0123456789"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "slackLists.items.delete") {
+		t.Fatalf("dry-run output missing method name: %q", got)
+	}
+}
+
+func TestListDeleteItem_LongMentionsSlackUI(t *testing.T) {
+	cmd := newListCommand(&GlobalFlags{})
+	sub, _, err := cmd.Find([]string{"delete-item"})
+	if err != nil {
+		t.Fatalf("find delete-item: %v", err)
+	}
+	if !strings.Contains(sub.Long, "Slack UI") {
+		t.Fatalf("delete-item Long must mention Slack UI: %q", sub.Long)
+	}
+}
+
+func TestListUpdate_FlagsRegistered(t *testing.T) {
+	cmd := newListCommand(&GlobalFlags{})
+	sub, _, err := cmd.Find([]string{"update"})
+	if err != nil {
+		t.Fatalf("find update: %v", err)
+	}
+	for _, name := range []string{"id", "name", "description", "todo-mode"} {
+		if sub.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag --%s on list update", name)
+		}
+	}
+	// --id is required; optional flags must NOT be required.
+	required := map[string]bool{}
+	sub.Flags().VisitAll(func(f *pflag.Flag) {
+		if v, _ := f.Annotations[cobra.BashCompOneRequiredFlag]; len(v) > 0 && v[0] == "true" {
+			required[f.Name] = true
+		}
+	})
+	if !required["id"] {
+		t.Fatal("--id must be required on list update")
+	}
+	for _, name := range []string{"name", "description", "todo-mode"} {
+		if required[name] {
+			t.Errorf("--%s must be optional on list update", name)
+		}
+	}
+}
+
+func TestListUpdate_DryRun(t *testing.T) {
+	g := &GlobalFlags{DryRun: true}
+	cmd := newListCommand(g)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"update", "--id", "F01234567", "--name", "New Name"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := out.String()
+	if !strings.Contains(got, "slackLists.update") {
+		t.Fatalf("dry-run output missing method name: %q", got)
+	}
+}
+
+func TestListUpdate_DryRun_OnlySetParams(t *testing.T) {
+	// Only --id and --name are set; description and todo-mode must not appear.
+	g := &GlobalFlags{DryRun: true}
+	cmd := newListCommand(g)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"update", "--id", "F01234567", "--name", "Sprint"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	got := out.String()
+	if strings.Contains(got, "description") {
+		t.Fatalf("dry-run must not include unset --description: %q", got)
+	}
+	if strings.Contains(got, "todo_mode") {
+		t.Fatalf("dry-run must not include unset --todo-mode: %q", got)
 	}
 }

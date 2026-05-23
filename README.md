@@ -179,13 +179,22 @@ channels:history channels:read channels:write
 groups:history   groups:read   groups:write
 im:history       im:read       im:write
 mpim:history     mpim:read     mpim:write
-chat:write       reactions:write
+chat:write
+reactions:read   reactions:write
 search:read
-users:read       users.profile:read
-files:read
+users:read       users:write   users.profile:read users.profile:write
+files:read       files:write
 canvases:read    canvases:write
 lists:read       lists:write
+pins:read        pins:write
+bookmarks:read   bookmarks:write
+team:read        emoji:read
+dnd:read         dnd:write
+usergroups:read  usergroups:write
 ```
+
+Not every command needs every scope — grant only the subset for the commands you use.
+This is also the default set `slk auth login` requests.
 
 You can paste an equivalent **App Manifest** into the same UI to add them in one shot.
 
@@ -438,9 +447,9 @@ These behaviors come from Slack itself, not from `slk`:
   pick `--at` at least 5–10 minutes in the future.
 - **`msg delete` on a self-DM returns `chat.delete: internal_error`.** Slack restricts API
   deletion of 1:1 DMs; use the Slack desktop or web UI.
-- **Slack Lists have no public delete API.** `slackLists.delete` returns `unknown_method`,
-  and `files.delete` requires the `files:write` scope which is not in `slk`'s default set.
-  Delete lists in the Slack UI.
+- **Slack Lists have no whole-list delete API.** `slackLists.delete` returns `unknown_method`,
+  so an entire List must be removed in the Slack UI. Individual rows can be removed with
+  `list delete-item` (`slackLists.items.delete`).
 - **`channel invite` cannot invite a channel's creator or any existing member.** Slack
   returns `cant_invite_self` / `already_in_channel`. `slk` surfaces the error verbatim.
 - **`canvas read` cannot recover the original code-block language hint.** Slack's HTML

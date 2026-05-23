@@ -10,6 +10,52 @@ import (
 	"github.com/howar31/slk/internal/auth"
 )
 
+func TestAuthLogin_DefaultScopesIncludeExpanded(t *testing.T) {
+	cmd := newAuthCommand(&GlobalFlags{})
+	login, _, err := cmd.Find([]string{"login"})
+	if err != nil {
+		t.Fatalf("find login: %v", err)
+	}
+	def := login.Flags().Lookup("scopes").DefValue
+	for _, s := range []string{
+		"reactions:read", "files:write", "users.profile:write",
+		"pins:read", "pins:write", "bookmarks:read", "bookmarks:write",
+		"team:read", "emoji:read", "users:write", "dnd:read", "dnd:write",
+		"usergroups:read", "usergroups:write",
+	} {
+		if !strings.Contains(def, s) {
+			t.Errorf("default scopes missing %q", s)
+		}
+	}
+}
+
+func TestFormatAuthIdentity(t *testing.T) {
+	raw := []byte(`{"ok":true,"url":"https://acme.slack.com/","team":"acme","user":"alice","team_id":"T0123456789","user_id":"U0123456789"}`)
+	line, err := formatAuthIdentity(raw)
+	if err != nil {
+		t.Fatalf("format: %v", err)
+	}
+	for _, want := range []string{"acme", "T0123456789", "alice", "U0123456789", "https://acme.slack.com/"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("identity line missing %q: %q", want, line)
+		}
+	}
+}
+
+func TestAuthRevoke_DryRun(t *testing.T) {
+	g := &GlobalFlags{DryRun: true}
+	cmd := newAuthCommand(g)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"revoke"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("revoke dry-run: %v", err)
+	}
+	if !strings.Contains(out.String(), "auth.revoke") {
+		t.Fatalf("dry-run did not name the method: %q", out.String())
+	}
+}
+
 func TestAuthLogout_MissingProfileErrors(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")

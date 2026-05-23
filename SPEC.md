@@ -11,8 +11,12 @@ exposes `--raw` for callers that want full API responses.
 
 Primary consumer: a developer agent (e.g. Claude Code) running on
 macOS or Linux, authenticated against the operator's own Slack app via
-OAuth user tokens (`xoxp-…`). slk replaces the 13 Slack MCP tools the
-operator has connected, with 1:1 capability parity.
+OAuth user tokens (`xoxp-…`). 1:1 parity with the 13 Slack MCP tools was
+the original baseline; the curated surface has since grown to ~97 verbs
+across 16 groups, covering most user-token-reachable Slack Web API
+methods (everything the default OAuth scope set grants, excluding
+Enterprise-Grid `admin.*`, `xoxc`/`xoxd`-only, deprecated, and
+app-framework methods).
 
 ## Architecture
 
@@ -27,7 +31,11 @@ operator has connected, with 1:1 capability parity.
    `internal/api.Client` pointed at `https://slack.com/api`.
 4. The client serializes form-urlencoded params, performs the HTTP call,
    maps `ok=false` responses into `*api.APIError`, retries on 429
-   (`Retry-After`) up to a small bound, and returns raw JSON.
+   (`Retry-After`) up to a small bound, and returns raw JSON. A separate
+   `Client.CallMultipart` (`internal/api/multipart.go`) sends a
+   multipart/form-data body with a single file part for the few methods
+   that take a binary upload (`users.setPhoto`; the external-upload step
+   of `file upload` POSTs raw bytes to Slack's returned `upload_url`).
 5. Read commands deserialize into compact item types, optionally pass
    IDs through `internal/resolve` (cached `users.info` lookups), and
    emit via `internal/output.Emit` in `concise|json|jsonl|table`.
@@ -94,6 +102,7 @@ External dependencies are intentionally narrow:
 ├── internal/
 │   ├── api/                    # HTTP client, error mapping, paginator
 │   │   ├── client.go           # api.Client; BaseURL overridable for tests
+│   │   ├── multipart.go        # CallMultipart: multipart/form-data file upload
 │   │   ├── errors.go           # APIError + ExitCodeFor() mapping
 │   │   └── paginate.go         # CallAll: walks next_cursor up to N pages
 │   ├── auth/                   # credential management
@@ -111,16 +120,30 @@ External dependencies are intentionally narrow:
 │   │   ├── input.go            # readContent: --text vs --text-file/stdin
 │   │   ├── lookup.go           # slackLookup + resolveUser wiring
 │   │   ├── api.go              # escape-hatch `slk api`
-│   │   ├── auth.go             # set-token / status / switch / logout / login
-│   │   ├── msg.go              # send / read / update / delete / react /
-│   │   │                       # schedule / draft + slackMessage helper
+│   │   ├── auth.go             # set-token / status / switch / logout / login /
+│   │   │                       # test (auth.test) / revoke (auth.revoke)
+│   │   ├── msg.go              # send / read / update / delete / react / unreact /
+│   │   │                       # schedule / unschedule / scheduled / permalink /
+│   │   │                       # ephemeral / me / reactions / reacted / draft
 │   │   ├── thread.go           # read / reply (uses --thread on both)
-│   │   ├── canvas.go           # create / read / update / list
-│   │   ├── channel.go          # create / archive / invite / topic / list
-│   │   ├── list.go             # Slack Lists: create / read / add-item /
-│   │   │                       # update-item; injectRowID helper
-│   │   ├── user.go             # info / profile / list (default-filter)
-│   │   ├── search.go           # messages / channels / users
+│   │   ├── canvas.go           # create / read / update / list / delete / share / unshare
+│   │   ├── channel.go          # create / archive / invite / topic / list / info /
+│   │   │                       # members / join / leave / purpose / kick / rename /
+│   │   │                       # unarchive / open / mark / close
+│   │   ├── list.go             # Slack Lists: create / read / add-item / update-item /
+│   │   │                       # delete-item / update; injectRowID helper
+│   │   ├── user.go             # info / profile / list / by-email / presence /
+│   │   │                       # channels / set-profile / set-photo / delete-photo /
+│   │   │                       # set-presence
+│   │   ├── search.go           # messages / channels / users / files / all
+│   │   ├── file.go             # files: list / info / upload / delete / public / revoke-public
+│   │   ├── pin.go              # pins: add / remove / list
+│   │   ├── bookmark.go         # bookmarks: add / edit / remove / list
+│   │   ├── team.go             # team: info / profile
+│   │   ├── emoji.go            # emoji: list
+│   │   ├── dnd.go              # dnd: info / team / snooze / end-snooze / end
+│   │   ├── usergroup.go        # usergroups: list / create / update / enable /
+│   │   │                       # disable / users / set-users
 │   │   ├── version.go          # version + --check GitHub-release probe
 │   │   └── generateskill.go    # hidden `generate-skill`: writes skills/slk/SKILL.md
 │   ├── skillgen/               # SKILL.md generator
@@ -208,7 +231,7 @@ Each package carries focused tests:
 
 | Package | Coverage focus |
 |---|---|
-| `internal/api` | error mapping, paginator cursor handling, retry on 429 |
+| `internal/api` | error mapping, paginator cursor handling, retry on 429, multipart upload |
 | `internal/auth` | TOML load/save, token-precedence matrix, OAuth callback |
 | `internal/commands` | dry-run output, flag registration, response-shape parsing helpers |
 | `internal/output` | each render branch + unknown-format error path |
@@ -219,8 +242,11 @@ Command tests stay at dry-run + flag-registration depth because
 `buildClient` reaches real config; helpers that parse Slack responses
 are exposed as small functions (`parseListCreateID`,
 `parseScheduledMessageID`, `parseListItems`, `messageDisplay`,
-`injectRowID`, `fetchChannelsWith`, `fetchUsersWith`) and unit-tested
-in isolation against `httptest.NewServer`-backed `api.Client` instances.
+`injectRowID`, `fetchChannelsWith`, `fetchUsersWith`, and the newer
+per-group parsers such as `parseChannelMembers`, `parseUsergroups`,
+`fileFetchList`, `parseBookmarks`, `parseEmojiList`, `formatAuthIdentity`)
+and unit-tested in isolation against `httptest.NewServer`-backed
+`api.Client` instances.
 
 End-to-end coverage against a live Slack workspace is run manually
 when changes touch write paths. The matrix and findings are recorded
@@ -326,9 +352,9 @@ Runtime state:
   `homebrew/cask` submission (which requires notarization).
 - **Canvas read loses code-block language**: Slack's HTML route does
   not carry the original triple-backtick language hint. Inherent.
-- **No Slack Lists delete**: `slackLists.delete` does not exist on the
-  public API; `files.delete` requires `files:write` which slk's default
-  scope set omits. Lists must be cleaned in the Slack UI.
+- **No whole-List delete**: `slackLists.delete` does not exist on the
+  public API, so a whole List must be cleaned in the Slack UI. Individual
+  rows are deletable via `list delete-item` (`slackLists.items.delete`).
 - **Scheduled-message cancel race**: `chat.deleteScheduledMessage` may
   return `ok=true` for schedules within ~5 minutes of `post_at` yet the
   message still posts. Slack-side queue lock; documented in README.
@@ -349,6 +375,15 @@ Runtime state:
   for every covered workflow. Token cost is the deciding factor: MCP
   ships ~5–10K tokens of schema and returns full message envelopes;
   slk emits 2–20-token confirmation lines by default.
+- **Coverage extends beyond MCP parity.** Once curation proved out, the
+  surface was expanded to wrap most user-token-reachable Web API methods,
+  not just the 13 MCP equivalents. The boundary is "what an OAuth user
+  token can be granted": included families are gated only by adding their
+  scope to the default set; excluded are Enterprise-Grid `admin.*`,
+  `xoxc`/`xoxd`-only, deprecated (`reminders.*`/`stars.*`), and
+  app-framework (`views`/`workflows`/`functions`/…) methods. The default
+  OAuth scope set (the `--scopes` default in `auth login`) was expanded
+  to 36 scopes so the curated commands work after a single re-auth.
 - **xoxp-only.** Any feature that requires `xoxc`/`xoxd` (drafts
   list/delete/update, internal search modules) is intentionally
   unimplemented. README's "Known Slack-side limitations" section is the
