@@ -251,13 +251,28 @@ at the top of that page — copy it. Some workspaces require an admin to approve
 
 ### 4. Store the token in `slk`
 
+Run it in a terminal with no arguments — `slk` asks for each field and hides the token as you
+paste it, so nothing lands in your shell history:
+
 ```bash
-slk auth set-token --profile work --workspace acme --user xoxp-...
+slk auth set-token
 ```
 
-To keep the token out of your shell history, omit `--user` and run it in a terminal — `slk`
-prompts for each missing field and hides the token as you paste it. For scripts, pipe the
-token in instead: `printf '%s' "$TOKEN" | slk auth set-token --profile work --user -`.
+It prompts for four things:
+
+- **`Profile name [default]:`** — a label for this set of credentials, so you can keep more
+  than one (e.g. `work`, `personal`) and switch between them with `slk auth switch <name>`.
+  Press Enter to accept `default`.
+- **`Workspace label (optional):`** — a human-readable note for which workspace this is
+  (e.g. `acme`). Cosmetic only; press Enter to skip.
+- **`Paste user token (xoxp-, hidden):`** — the **User OAuth Token** you copied in step 3.
+  Input is hidden; paste it and press Enter.
+- **`Paste bot token (xoxb-, optional, hidden):`** — only if you also use a bot token
+  (`xoxb-`); most users press Enter to skip.
+
+Scripting it instead? Pass values as flags (`slk auth set-token --help`), and use `--user -`
+to read the token from stdin so it stays out of history:
+`printf '%s' "$TOKEN" | slk auth set-token --profile work --user -`.
 
 Tokens land in `~/.config/slk/config.toml` (mode `0600`) and are encrypted at rest (see
 [Credential storage](#credential-storage)). `slk` never prints token contents; `slk auth
