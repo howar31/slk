@@ -43,6 +43,7 @@ exposes `--raw` when a caller wants full API responses.
 - [Environment variables](#environment-variables)
 - [Exit codes](#exit-codes)
 - [Known Slack-side limitations](#known-slack-side-limitations)
+- [Team setup](#team-setup)
 - [Development](#development)
 - [License](#license)
 - [Disclaimer](#disclaimer)
@@ -534,6 +535,41 @@ These behaviors come from Slack itself, not from `slk`:
   the language tag is not.
 - **`drafts.list` / `drafts.delete` / `drafts.update` require a Slack-client token type
   that is not available to OAuth user tokens.** Manage drafts in the Slack UI.
+
+## Team setup
+
+An advanced rollout for sharing one Slack app across a team. One app serves everyone — you do
+**not** create an app per person. One person sets it up once; each teammate then authorizes it
+and gets their **own** user token (`xoxp-`). Tokens are per-user (each carries that person's
+identity and permissions), so never share a single token.
+
+### One-time, by the app owner
+
+1. Create the app and add scopes — [Authentication](#authentication) steps 1–2. The manifest's
+   `user:` list is the set everyone gets: the OAuth consent screen is **all-or-nothing**
+   (**Allow** / **Cancel**, with the scope checkboxes greyed out), so a teammate can't pick
+   scopes in the browser. To grant fewer, a teammate narrows `--scopes` on the `slk auth login`
+   command *before* authorizing (it can never exceed the app's set); to make scopes toggleable
+   in the browser, mark them **optional** in the app settings / manifest.
+2. **OAuth & Permissions → Redirect URLs**: add `http://localhost:3000/callback` (the port
+   `slk auth login` listens on; override with `--port`).
+3. **Manage Distribution → Activate Public Distribution**, so teammates who are *not* app
+   collaborators can authorize it.
+4. Copy the **Client ID** and **Client Secret** from **Basic Information → App Credentials**.
+
+### Per teammate
+
+Each teammate runs the OAuth flow with the shared app credentials to mint their own token:
+
+```bash
+slk auth login --client-id <id> --client-secret <secret>
+```
+
+This **prints an authorize URL** and starts a local listener on `localhost:3000` (the
+`--port`). Open the printed URL in a browser and approve; Slack redirects back to that listener
+with a code, which `slk` exchanges and stores as the teammate's own `xoxp-` token (encrypted at
+rest). The listener waits ~5 minutes, then times out. Verify with `slk auth status` /
+`slk auth test` — see [Authentication](#authentication) step 5.
 
 ## Development
 
