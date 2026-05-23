@@ -44,7 +44,10 @@ func newGenerateSkillsCommand(version string) *cobra.Command {
 }
 
 // cleanGeneratedSkills removes the previously generated skill dirs (`slk` and
-// `slk-*`) under dir, leaving any non-generated content untouched.
+// `slk-*`) under dir, leaving any non-generated content untouched. A match is
+// only removed when it is a directory containing a SKILL.md — so an unexpected
+// --output-dir (e.g. the repo root) cannot delete the built `slk` binary or
+// unrelated files/dirs that merely match the `slk`/`slk-*` pattern.
 func cleanGeneratedSkills(dir string) error {
 	matches, err := filepath.Glob(filepath.Join(dir, "slk"))
 	if err != nil {
@@ -55,6 +58,13 @@ func cleanGeneratedSkills(dir string) error {
 		return err
 	}
 	for _, d := range append(matches, more...) {
+		info, err := os.Stat(d)
+		if err != nil || !info.IsDir() {
+			continue // skip files (e.g. the slk binary)
+		}
+		if _, err := os.Stat(filepath.Join(d, "SKILL.md")); err != nil {
+			continue // not a generated skill dir — leave it alone
+		}
 		if err := os.RemoveAll(d); err != nil {
 			return err
 		}
