@@ -255,11 +255,14 @@ Active credential resolution, highest precedence first:
 
 ## Agent setup
 
-`slk`'s agent skill (`skills/slk/SKILL.md`) is **generated from the CLI itself** —
+`slk`'s agent skills (the `skills/` tree) are **generated from the CLI itself** —
 every command, flag, the Slack method each one wraps, and a confirm-before-writing
-caution on destructive verbs. Because it is generated and drift-guarded in CI, your
-agent always sees accurate, in-sync docs instead of a hand-written file that lags the
-code. Install it with one command, or wire it up per agent below.
+caution on destructive verbs. The skill is split per command group: a small `slk`
+index lists the groups and links to one `slk-<group>` skill each, alongside a shared
+`slk-shared` reference — so an agent loads only the surface it needs instead of one
+large file. Because they are generated and drift-guarded in CI, your agent always
+sees accurate, in-sync docs instead of hand-written files that lag the code. Install
+them with one command, or wire them up per agent below.
 
 ### Claude Code, Cursor, and other skill-aware agents
 
@@ -267,13 +270,12 @@ code. Install it with one command, or wire it up per agent below.
 npx skills add https://github.com/howar31/slk
 ```
 
-This installs `skills/slk/SKILL.md` into your agent's skills directory (e.g.
-`~/.claude/skills/`). Claude Code activates the skill automatically when a task
-mentions Slack. Manual fallback:
+This installs slk's skills into your agent's skills directory (e.g.
+`~/.claude/skills/`). Claude Code activates the matching skill automatically when a
+task mentions Slack. Manual fallback (copy the whole tree):
 
 ```bash
-mkdir -p ~/.claude/skills/slk
-cp ./skills/slk/SKILL.md ~/.claude/skills/slk/SKILL.md
+cp -R ./skills/slk ./skills/slk-* ~/.claude/skills/
 ```
 
 ### Gemini CLI
@@ -282,20 +284,21 @@ cp ./skills/slk/SKILL.md ~/.claude/skills/slk/SKILL.md
 gemini extensions install https://github.com/howar31/slk
 ```
 
-Requires `slk` on your `$PATH` (install via Homebrew or npm first).
+Requires `slk` on your `$PATH` (install via Homebrew or npm first). The extension
+loads the `slk` index skill; browse group-level detail with `slk <group> --help`.
 
 ### OpenClaw
 
-OpenClaw reads `skills/slk/SKILL.md`'s frontmatter. Symlink it to stay in sync with the repo:
-`ln -s $(pwd)/skills/slk ~/.openclaw/skills/`. If the `slk` binary is missing, OpenClaw
-auto-installs it from one of the `install:` specs in the skill metadata (npm `@howar31/slk`,
-the Homebrew tap, or `go install`).
+OpenClaw reads the skills' frontmatter. Symlink the tree to stay in sync with the repo:
+`ln -s $(pwd)/skills/slk* ~/.openclaw/skills/`. If the `slk` binary is missing, OpenClaw
+auto-installs it from one of the `install:` specs in the `slk` index skill's metadata
+(npm `@howar31/slk`, the Homebrew tap, or `go install`).
 
 ### Cursor / aider / others
 
 Either reference `slk --help` from your agent's instruction file, or paste the contents of
-[`skills/slk/SKILL.md`](skills/slk/SKILL.md) into the agent's persistent rules file (e.g.,
-`.cursorrules`, `GEMINI.md`).
+the index skill [`skills/slk/SKILL.md`](skills/slk/SKILL.md) (which links to the per-group
+skills) into the agent's persistent rules file (e.g., `.cursorrules`, `GEMINI.md`).
 
 ## Usage
 
@@ -474,8 +477,8 @@ go tool cover -func=/tmp/slk.cov | tail -1
 # A single test
 go test ./internal/commands/ -run TestInjectRowID -v
 
-# Regenerate the agent skill after changing any command (CI enforces no drift)
-go run ./cmd/slk generate-skill
+# Regenerate the agent skills after changing any command (CI enforces no drift)
+go run ./cmd/slk generate-skills
 ```
 
 Architecture, conventions, and design decisions live in [SPEC.md](SPEC.md).

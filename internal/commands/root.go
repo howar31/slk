@@ -36,7 +36,7 @@ func NewRootCommand(version string) *cobra.Command {
 		newDndCommand(g),
 		newUsergroupCommand(g),
 		newVersionCommand(g, version),
-		newGenerateSkillCommand(version),
+		newGenerateSkillsCommand(version),
 	)
 	return root
 }

@@ -1,5 +1,5 @@
-// Package skillgen renders the agent-facing SKILL.md from the Cobra command
-// tree, so the skill is a generated artifact rather than a hand-maintained file.
+// Package skillgen renders the agent-facing skill tree from the Cobra command
+// tree, so the skills are generated artifacts rather than hand-maintained files.
 package skillgen
 
 import (
@@ -13,33 +13,134 @@ import (
 	"github.com/spf13/pflag"
 )
 
-//go:embed skill.md.tmpl
-var docTemplate string
+//go:embed templates/index.md.tmpl
+var indexTemplate string
 
-type tmplData struct {
-	Version      string
-	GlobalFlags  string
-	CommandIndex string
-	Commands     string
+//go:embed templates/shared.md.tmpl
+var sharedTemplate string
+
+//go:embed templates/group.md.tmpl
+var groupTemplate string
+
+type indexData struct {
+	Version    string
+	Groups     string
+	LeafBodies string
 }
 
-// Generate renders the full SKILL.md for root at the given version.
-func Generate(root *cobra.Command, version string) (string, error) {
-	t, err := template.New("skill").Parse(docTemplate)
+type sharedData struct {
+	Version     string
+	GlobalFlags string
+}
+
+type groupData struct {
+	Version   string
+	Name      string
+	GroupPath string
+	Short     string
+	Commands  string
+}
+
+// GenerateAll renders every skill file for root at version. The returned map is
+// keyed by path relative to the skills output directory (e.g. "slk/SKILL.md",
+// "slk-shared/SKILL.md", "slk-channel/SKILL.md").
+func GenerateAll(root *cobra.Command, version string) (map[string]string, error) {
+	out := make(map[string]string)
+
+	idx, err := render(indexTemplate, indexData{
+		Version:    version,
+		Groups:     renderGroupDirectory(root),
+		LeafBodies: renderTopLevelLeaves(root),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out["slk/SKILL.md"] = idx
+
+	sh, err := render(sharedTemplate, sharedData{
+		Version:     version,
+		GlobalFlags: renderGlobalFlags(root),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out["slk-shared/SKILL.md"] = sh
+
+	for _, c := range visibleChildren(root) {
+		if !c.HasAvailableSubCommands() {
+			continue // top-level leaves fold into the index
+		}
+		var b strings.Builder
+		b.WriteString(renderGroupCommandIndex(c))
+		b.WriteString("\n")
+		for _, sub := range visibleChildren(c) {
+			writeLeaf(&b, sub, "##")
+		}
+		g, err := render(groupTemplate, groupData{
+			Version:   version,
+			Name:      "slk-" + c.Name(),
+			GroupPath: c.CommandPath(),
+			Short:     c.Short,
+			Commands:  b.String(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		out["slk-"+c.Name()+"/SKILL.md"] = g
+	}
+	return out, nil
+}
+
+func render(tmpl string, data any) (string, error) {
+	t, err := template.New("skill").Parse(tmpl)
 	if err != nil {
 		return "", err
-	}
-	data := tmplData{
-		Version:      version,
-		GlobalFlags:  renderGlobalFlags(root),
-		CommandIndex: renderIndex(root),
-		Commands:     renderCommands(root),
 	}
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, data); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+// renderGroupDirectory builds the index's table of command groups, each linking
+// to its own sub-skill. Top-level leaf commands are excluded (they render via
+// renderTopLevelLeaves).
+func renderGroupDirectory(root *cobra.Command) string {
+	var b strings.Builder
+	b.WriteString("| Group | Description | Skill |\n|-------|-------------|-------|\n")
+	for _, c := range visibleChildren(root) {
+		if !c.HasAvailableSubCommands() {
+			continue
+		}
+		fmt.Fprintf(&b, "| `%s` | %s | [slk-%s](../slk-%s/SKILL.md) |\n",
+			c.CommandPath(), escapePipes(c.Short), c.Name(), c.Name())
+	}
+	return b.String()
+}
+
+// renderGroupCommandIndex builds a quick-scan table of a group's verbs for the
+// top of its skill, before the per-verb detail sections.
+func renderGroupCommandIndex(c *cobra.Command) string {
+	var b strings.Builder
+	b.WriteString("| Command | Description |\n|---------|-------------|\n")
+	for _, sub := range visibleChildren(c) {
+		fmt.Fprintf(&b, "| `%s` | %s |\n", sub.CommandPath(), escapePipes(sub.Short))
+	}
+	return b.String()
+}
+
+// renderTopLevelLeaves renders the bodies of root commands that have no
+// subcommands (e.g. `slk api`, `slk version`) for inclusion in the index.
+func renderTopLevelLeaves(root *cobra.Command) string {
+	var b strings.Builder
+	for _, c := range visibleChildren(root) {
+		if c.HasAvailableSubCommands() {
+			continue
+		}
+		writeLeaf(&b, c, "##")
+	}
+	return b.String()
 }
 
 // visibleChildren returns the documentable subcommands of c, skipping hidden,
@@ -73,36 +174,6 @@ func renderGlobalFlags(root *cobra.Command) string {
 		}
 		fmt.Fprintf(&b, "| `--%s` | %s | %s |\n", f.Name, defaultCell(f), escapePipes(f.Usage))
 	})
-	return b.String()
-}
-
-func renderIndex(root *cobra.Command) string {
-	var b strings.Builder
-	b.WriteString("| Command | Description |\n|---------|-------------|\n")
-	for _, c := range visibleChildren(root) {
-		if c.HasAvailableSubCommands() {
-			for _, sub := range visibleChildren(c) {
-				fmt.Fprintf(&b, "| `%s` | %s |\n", sub.CommandPath(), escapePipes(sub.Short))
-			}
-		} else {
-			fmt.Fprintf(&b, "| `%s` | %s |\n", c.CommandPath(), escapePipes(c.Short))
-		}
-	}
-	return b.String()
-}
-
-func renderCommands(root *cobra.Command) string {
-	var b strings.Builder
-	for _, c := range visibleChildren(root) {
-		if c.HasAvailableSubCommands() {
-			fmt.Fprintf(&b, "## %s\n\n%s\n\n", c.CommandPath(), c.Short)
-			for _, sub := range visibleChildren(c) {
-				writeLeaf(&b, sub, "###")
-			}
-		} else {
-			writeLeaf(&b, c, "##")
-		}
-	}
 	return b.String()
 }
 

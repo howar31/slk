@@ -2,9 +2,9 @@
 # Fan the VERSION single source of truth into the committed plain-text files
 # that carry a literal copy of it: gemini-extension.json and SECURITY.md.
 #
-# skills/slk/SKILL.md is NOT handled here. It is a generated artifact, rebuilt
-# wholesale from the Cobra command tree by `slk generate-skill` (which stamps the
-# version as one field along the way); run that separately and let CI's `skill`
+# The skills/ tree is NOT handled here. It is a generated artifact, rebuilt
+# wholesale from the Cobra command tree by `slk generate-skills` (which stamps the
+# version into every skill along the way); run that separately and let CI's `skill`
 # job guard it. This script is purely the version fan-out for the two files that
 # nothing else generates.
 #

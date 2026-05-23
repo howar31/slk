@@ -1,0 +1,20 @@
+---
+name: {{.Name}}
+description: "{{.Short}}"
+metadata:
+  version: {{.Version}}
+  openclaw:
+    category: "productivity"
+    requires:
+      bins:
+        - slk
+    cliHelp: "{{.GroupPath}} --help"
+---
+
+# {{.GroupPath}}
+
+{{.Short}}
+
+> **PREREQUISITE:** Read `../slk-shared/SKILL.md` for auth, global flags, security rules, and exit codes. If missing, run `slk generate-skills`.
+
+{{.Commands}}

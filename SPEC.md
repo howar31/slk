@@ -65,14 +65,23 @@ or replaces the binary. Plain `slk version` / `slk --version` stay
 fully offline.
 
 The agent skill is a generated artifact, not a hand-maintained file. `slk
-generate-skill` (a hidden command) renders `skills/slk/SKILL.md` from the live
-Cobra command tree plus an embedded preamble template (`internal/skillgen`), so
-the code, `slk --help`, and the skill share one source and cannot drift. Each
-command carries `Annotations["slackMethod"]` (the Slack method it wraps) and, for
-mutating commands, `Annotations["write"]="true"`; the generator emits these as a
-per-command `**Slack API:**` line and a write `CAUTION` callout, and renders flag
-tables (`Required` from `MarkFlagRequired`, `Default` from the flag default). A
-CI job regenerates the skill and fails on any diff.
+generate-skills` (a hidden command) renders a skill tree from the live Cobra
+command tree plus embedded templates (`internal/skillgen`), so the code, `slk
+--help`, and the skills share one source and cannot drift. The tree is a small
+`slk` index skill (syntax, a command-group directory linking to each group's
+skill, the top-level leaf commands `api`/`version`, and the sole copy of the
+`install`/openclaw block), a `slk-shared` cross-cutting reference (global flags,
+security rules, exit codes, shell tips), and one `slk-<group>` skill per command
+group. Each group skill carries only `requires.bins: [slk]` plus a PREREQUISITE
+pointer to `slk-shared`, a quick command-index table, and per-verb detail.
+The group set is derived from the command tree at generation time, so adding or
+removing a command group adds or removes its skill with no hand-maintained list.
+Each command carries `Annotations["slackMethod"]` (the Slack method it wraps)
+and, for mutating commands, `Annotations["write"]="true"`; the generator emits
+these as a per-command `**Slack API:**` line and a write `CAUTION` callout, and
+renders flag tables (`Required` from `MarkFlagRequired`, `Default` from the flag
+default). A CI job regenerates the tree and fails on any diff (staged, so added
+or removed skill files are caught too).
 
 The binary version is single-sourced: a committed `VERSION` file at the repo root
 is embedded via `//go:embed` (root `package slk`, `version.go` → `slk.Version`)
@@ -145,16 +154,22 @@ External dependencies are intentionally narrow:
 │   │   ├── usergroup.go        # usergroups: list / create / update / enable /
 │   │   │                       # disable / users / set-users
 │   │   ├── version.go          # version + --check GitHub-release probe
-│   │   └── generateskill.go    # hidden `generate-skill`: writes skills/slk/SKILL.md
-│   ├── skillgen/               # SKILL.md generator
-│   │   ├── skillgen.go         # Generate(tree, version) → markdown
-│   │   └── skill.md.tmpl       # embedded preamble + frontmatter template
+│   │   └── generateskill.go    # hidden `generate-skills`: writes the skills/ tree
+│   ├── skillgen/               # skill-tree generator
+│   │   ├── skillgen.go         # GenerateAll(tree, version) → map[path]content
+│   │   └── templates/          # embedded index / shared / group templates
+│   │       ├── index.md.tmpl
+│   │       ├── shared.md.tmpl
+│   │       └── group.md.tmpl
 │   ├── output/                 # concise|json|jsonl|table renderers
 │   ├── quip/                   # canvas HTML→Markdown converter
 │   │   ├── convert.go
 │   │   └── testdata/           # canvas_fixture.{html,md} golden file
 │   └── resolve/                # ID→name cache (~/.config/slk/cache)
-├── skills/slk/SKILL.md         # GENERATED agent skill — do not hand-edit
+├── skills/                     # GENERATED agent skills — do not hand-edit
+│   ├── slk/SKILL.md            # index (group directory + api/version + install block)
+│   ├── slk-shared/SKILL.md     # shared: global flags, security, exit codes, shell tips
+│   └── slk-<group>/SKILL.md    # one per command group (msg, channel, …)
 ├── npm/                        # npm wrapper (postinstall downloads the binary)
 │   ├── package.json            # bin.slk=run.js, postinstall=install.js
 │   ├── install.js              # download tarball + verify checksum
@@ -204,21 +219,22 @@ External dependencies are intentionally narrow:
   at release time (`npm/package.json`'s committed `0.0.0` is a
   placeholder). Three committed files carry a literal copy because they
   are read at rest by external tools, fanned out via **two separate
-  concerns**: `skills/slk/SKILL.md` (`metadata.version`) is produced by
-  `slk generate-skill`, which rebuilds the whole skill from the command
-  tree and stamps the version as one field (CI `skill` job guards drift);
+  concerns**: the `skills/` tree (each skill's `metadata.version`) is
+  produced by `slk generate-skills`, which rebuilds the whole tree from the
+  command tree and stamps the version into every file (CI `skill` job guards
+  drift);
   `gemini-extension.json` (`version`) and `SECURITY.md` (supported-versions
   table) are pure version copies rewritten by `scripts/sync-version.sh`
   (CI `version-sync` job guards drift).
-- **The skill is generated**: `skills/slk/SKILL.md` is produced by `slk
-  generate-skill` from the Cobra tree — never hand-edit it. Per-command
+- **The skills are generated**: the `skills/` tree is produced by `slk
+  generate-skills` from the Cobra tree — never hand-edit it. Per-command
   `Annotations["slackMethod"]` and `Annotations["write"]` drive the
   generated Slack-method line and the write `CAUTION`; CI fails if the
-  committed skill drifts from the generator.
+  committed tree drifts from the generator.
 - **README scope**: the README is human onboarding plus knowledge `slk
   --help` cannot convey (usage traps, data shapes, behavior notes). The
   complete, in-sync command reference is `slk --help` and the generated
-  `SKILL.md`; do not reintroduce a per-command example list or a
+  `skills/` tree; do not reintroduce a per-command example list or a
   global-flags table in the README — it would be a partial, drift-prone
   mirror of the command tree, contradicting the generated-skill SSOT.
 
@@ -231,7 +247,7 @@ External dependencies are intentionally narrow:
   paths only — `**.md`, `docs/**`, `LICENSE`, `.gitignore` are ignored),
   GitHub Actions runs a gofmt check, `go vet`, `go build ./...`,
   `go test ./...`, and `goreleaser check` on Go 1.25, plus a `skill` job
-  that regenerates `skills/slk/SKILL.md` and fails on any `git diff`
+  that regenerates the `skills/` tree and fails on any staged `git diff`
   (the drift guard).
 - Coverage snapshot: `go test ./... -coverpkg=./...
   -coverprofile=/tmp/slk.cov && go tool cover -func=/tmp/slk.cov`
@@ -266,7 +282,7 @@ outside the public tree).
 ## Deploy
 
 Releases are **VERSION-driven**, not tag-driven. Bump the `VERSION` file, then
-regenerate the skill (`go run ./cmd/slk generate-skill`) and run
+regenerate the skills (`go run ./cmd/slk generate-skills`) and run
 `scripts/sync-version.sh` (fans VERSION into `gemini-extension.json` +
 `SECURITY.md`) in a release PR; on merge to `main`,
 `.github/workflows/release.yml` runs. A `gate` job derives `v<VERSION>` and skips
@@ -440,11 +456,14 @@ Runtime state:
   pre-existing plaintext value and encrypts it on the next `Save`; it
   never rewrites the config on read.
 - **The agent skill is a generated artifact (the binary is its SSOT).**
-  Rather than hand-maintain `SKILL.md`, `slk generate-skill` renders it
-  from the Cobra tree plus an embedded preamble, so the code, `--help`,
-  and the skill cannot drift; a CI drift guard enforces it. Per-command
-  `slackMethod` / `write` annotations supply the curated bits the tree
-  alone cannot (the Slack method, the write CAUTION).
+  Rather than hand-maintain `SKILL.md`, `slk generate-skills` renders a
+  skill tree (a small `slk` index, a `slk-shared` reference, and one
+  `slk-<group>` skill per group) from the Cobra tree plus embedded
+  templates, so the code, `--help`, and the skills cannot drift; a CI
+  drift guard enforces it. Splitting per group keeps each skill small so
+  an agent loads only the surface it needs. Per-command `slackMethod` /
+  `write` annotations supply the curated bits the tree alone cannot (the
+  Slack method, the write CAUTION).
 - **One committed `VERSION` file is the single version source**, embedded
   via `//go:embed`, replacing `-ldflags` injection so a locally built
   binary and the generated skill report the same version deterministically.
