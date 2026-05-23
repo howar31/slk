@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 
 	"github.com/howar31/slk/internal/auth"
 	"github.com/spf13/cobra"
@@ -116,39 +117,82 @@ func loadConfig() (string, *auth.Config, error) {
 
 func newAuthSetTokenCommand() *cobra.Command {
 	var profile, workspace, userToken, botToken string
+	var nonInteractive bool
 	cmd := &cobra.Command{
 		Use:   "set-token",
 		Short: "Store tokens for a profile",
+		Long: "Store tokens for a profile. Pass values via flags for scripts/agents, or run " +
+			"with missing fields in a terminal to be prompted (token entry is hidden). Use " +
+			"--user - / --bot - to read a token from stdin.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			in := cmd.InOrStdin()
+			fd := int(os.Stdin.Fd())
+			if f, ok := in.(*os.File); ok {
+				fd = int(f.Fd())
+			}
+			interactive := !nonInteractive && isTerminal(fd)
+			errw := cmd.ErrOrStderr()
+			flags := cmd.Flags()
+
+			name, err := resolveLine(in, errw, profile, flags.Changed("profile"), interactive, "Profile name [default]: ")
+			if err != nil {
+				return err
+			}
+			if name == "" {
+				name = "default"
+			}
+
 			path, cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
-			p := cfg.Profiles[profile]
-			if workspace != "" {
-				p.Workspace = workspace
+			p, existed := cfg.Profiles[name]
+
+			ws, err := resolveLine(in, errw, workspace, flags.Changed("workspace"), interactive, "Workspace label (optional): ")
+			if err != nil {
+				return err
 			}
-			if userToken != "" {
-				p.UserToken = userToken
+			if ws != "" {
+				p.Workspace = ws
 			}
-			if botToken != "" {
-				p.BotToken = botToken
+
+			// A new profile must end up with a token; an existing one may keep its current.
+			ut, err := resolveSecret(in, errw, fd, userToken, flags.Changed("user"), interactive, !existed, "Paste user token (xoxp-, hidden): ")
+			if err != nil {
+				return err
 			}
-			cfg.Profiles[profile] = p
+			if ut != "" {
+				p.UserToken = ut
+			}
+
+			bt, err := resolveSecret(in, errw, fd, botToken, flags.Changed("bot"), interactive, false, "Paste bot token (xoxb-, optional, hidden): ")
+			if err != nil {
+				return err
+			}
+			if bt != "" {
+				p.BotToken = bt
+			}
+
+			if p.UserToken == "" && p.BotToken == "" {
+				return fmt.Errorf("no token; pass --user <token> or --bot <token> (use - to read stdin), or run in a terminal")
+			}
+
+			cfg.Profiles[name] = p
 			if cfg.Active == "" {
-				cfg.Active = profile
+				cfg.Active = name
 			}
 			if err := auth.Save(path, cfg); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "saved profile %q\n", profile)
+			fmt.Fprintf(cmd.OutOrStdout(), "saved profile %q\n", name)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&profile, "profile", "default", "profile name")
 	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace label")
-	cmd.Flags().StringVar(&userToken, "user", "", "user token (xoxp-)")
-	cmd.Flags().StringVar(&botToken, "bot", "", "bot token (xoxb-)")
+	cmd.Flags().StringVar(&userToken, "user", "", "user token (xoxp-, or - to read stdin)")
+	cmd.Flags().StringVar(&botToken, "bot", "", "bot token (xoxb-, or - to read stdin)")
+	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "never prompt; require values via flags")
 	return cmd
 }
 

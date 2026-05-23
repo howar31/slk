@@ -255,6 +255,10 @@ at the top of that page — copy it. Some workspaces require an admin to approve
 slk auth set-token --profile work --workspace acme --user xoxp-...
 ```
 
+To keep the token out of your shell history, omit `--user` and run it in a terminal — `slk`
+prompts for each missing field and hides the token as you paste it. For scripts, pipe the
+token in instead: `printf '%s' "$TOKEN" | slk auth set-token --profile work --user -`.
+
 Tokens land in `~/.config/slk/config.toml` (mode `0600`) and are encrypted at rest (see
 [Credential storage](#credential-storage)). `slk` never prints token contents; `slk auth
 status` shows presence booleans only.

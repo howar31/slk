@@ -128,6 +128,7 @@ External dependencies are intentionally narrow:
 │   │   ├── context.go          # GlobalFlags struct
 │   │   ├── clientutil.go       # buildClient(g) → *api.Client
 │   │   ├── input.go            # readContent: --text vs --text-file/stdin
+│   │   ├── prompt.go           # interactive prompts + token field resolution (set-token)
 │   │   ├── lookup.go           # slackLookup + resolveUser wiring
 │   │   ├── api.go              # escape-hatch `slk api`
 │   │   ├── auth.go             # set-token / status / switch / logout / login /
@@ -456,6 +457,14 @@ Runtime state:
   never block on an interactive keychain unlock. `Load` tolerates a
   pre-existing plaintext value and encrypts it on the next `Save`; it
   never rewrites the config on read.
+- **`auth set-token` prompts only as a human fallback, never for agents.**
+  Tokens can be set three ways: flags (the agent/script path, unchanged),
+  `--user -` / `--bot -` reading from stdin (keeps secrets out of shell
+  history), or an interactive prompt with hidden entry. Prompting is gated
+  on stdin being a TTY and is suppressed by `--non-interactive`, so
+  headless/agent callers never block — a missing required token is a clear
+  error, not a hang. A profile that resolves to no token is refused;
+  previously a no-flag invocation silently saved an empty profile.
 - **The agent skill is a generated artifact (the binary is its SSOT).**
   Rather than hand-maintain `SKILL.md`, `slk generate-skills` renders a
   skill tree (a small `slk` index, a `slk-shared` reference, and one

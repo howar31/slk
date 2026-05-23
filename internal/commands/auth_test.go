@@ -121,6 +121,135 @@ func TestAuthLogout_RemovesExisting(t *testing.T) {
 	}
 }
 
+func TestSetToken_NonInteractiveNoTokenErrors(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	set := newAuthCommand(&GlobalFlags{})
+	set.SetArgs([]string{"set-token", "--non-interactive", "--profile", "work"})
+	if err := set.Execute(); err == nil {
+		t.Fatal("expected error when no token in non-interactive mode")
+	}
+
+	cfg, err := auth.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if _, ok := cfg.Profiles["work"]; ok {
+		t.Fatal("a token-less profile must not be saved")
+	}
+}
+
+func TestSetToken_UserTokenFromStdin(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	set := newAuthCommand(&GlobalFlags{})
+	set.SetIn(strings.NewReader("xoxp-fromstdin\n"))
+	set.SetArgs([]string{"set-token", "--non-interactive", "--profile", "work", "--user", "-"})
+	if err := set.Execute(); err != nil {
+		t.Fatalf("set-token --user -: %v", err)
+	}
+	cfg, err := auth.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if cfg.Profiles["work"].UserToken != "xoxp-fromstdin" {
+		t.Fatalf("token not read from stdin: %+v", cfg.Profiles["work"])
+	}
+}
+
+func TestSetToken_InteractiveFillsMissing(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	origTerm, origSecret := isTerminal, readSecret
+	t.Cleanup(func() { isTerminal, readSecret = origTerm, origSecret })
+	isTerminal = func(int) bool { return true }
+	secrets := []string{"xoxp-interactive", ""} // user token, then bot (skipped)
+	readSecret = func(int) ([]byte, error) {
+		v := secrets[0]
+		secrets = secrets[1:]
+		return []byte(v), nil
+	}
+
+	set := newAuthCommand(&GlobalFlags{})
+	set.SetIn(strings.NewReader("work\nacme\n")) // profile, workspace
+	var out, errb bytes.Buffer
+	set.SetOut(&out)
+	set.SetErr(&errb)
+	set.SetArgs([]string{"set-token"})
+	if err := set.Execute(); err != nil {
+		t.Fatalf("interactive set-token: %v", err)
+	}
+
+	cfg, err := auth.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	p := cfg.Profiles["work"]
+	if p.UserToken != "xoxp-interactive" || p.Workspace != "acme" {
+		t.Fatalf("profile not filled from prompts: %+v", p)
+	}
+	if p.BotToken != "" {
+		t.Fatalf("empty bot prompt should skip: %+v", p)
+	}
+}
+
+func TestSetToken_InteractiveKeepsExistingToken(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+	t.Setenv("SLK_CONFIG", cfgPath)
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	seed := newAuthCommand(&GlobalFlags{})
+	seed.SetArgs([]string{"set-token", "--non-interactive", "--profile", "work", "--user", "xoxp-orig"})
+	if err := seed.Execute(); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	origTerm, origSecret := isTerminal, readSecret
+	t.Cleanup(func() { isTerminal, readSecret = origTerm, origSecret })
+	isTerminal = func(int) bool { return true }
+	readSecret = func(int) ([]byte, error) { return []byte(""), nil } // keep user, skip bot
+
+	upd := newAuthCommand(&GlobalFlags{})
+	upd.SetIn(strings.NewReader("work\nnewlabel\n"))
+	upd.SetArgs([]string{"set-token"})
+	if err := upd.Execute(); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	cfg, err := auth.Load(cfgPath)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	p := cfg.Profiles["work"]
+	if p.UserToken != "xoxp-orig" {
+		t.Fatalf("existing token should be kept: %+v", p)
+	}
+	if p.Workspace != "newlabel" {
+		t.Fatalf("workspace should update: %+v", p)
+	}
+}
+
+func TestSetToken_NonInteractiveFlagRegistered(t *testing.T) {
+	cmd := newAuthCommand(&GlobalFlags{})
+	st, _, err := cmd.Find([]string{"set-token"})
+	if err != nil {
+		t.Fatalf("find set-token: %v", err)
+	}
+	if st.Flags().Lookup("non-interactive") == nil {
+		t.Fatal("--non-interactive flag not registered")
+	}
+}
+
 func TestAuthSetTokenAndStatus(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
