@@ -77,10 +77,13 @@ slk auth set-token [flags]
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--bot` | — | — | bot token (xoxb-) |
+| `--bot` | — | — | bot token (xoxb-, or - to read stdin) |
+| `--non-interactive` | — | — | never prompt; require values via flags |
 | `--profile` | — | `default` | profile name |
-| `--user` | — | — | user token (xoxp-) |
+| `--user` | — | — | user token (xoxp-, or - to read stdin) |
 | `--workspace` | — | — | workspace label |
+
+**Tips:** Store tokens for a profile. Pass values via flags for scripts/agents, or run with missing fields in a terminal to be prompted (token entry is hidden). Use --user - / --bot - to read a token from stdin.
 
 ## slk auth status
 

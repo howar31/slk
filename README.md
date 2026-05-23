@@ -28,10 +28,10 @@ exposes `--raw` when a caller wants full API responses.
 
 ## Contents
 
+- [Why slk?](#why-slk)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Quick start](#quick-start)
-- [Why slk?](#why-slk)
 - [Authentication](#authentication)
 - [Agent setup](#agent-setup)
 - [Usage](#usage)
@@ -46,6 +46,40 @@ exposes `--raw` when a caller wants full API responses.
 - [Development](#development)
 - [License](#license)
 - [Disclaimer](#disclaimer)
+
+## Why slk?
+
+`slk` is built for agent workflows that talk to Slack frequently. Compared to the official
+Slack MCP connector, it is meaningfully cheaper per round-trip:
+
+| Operation | MCP response | `slk` default response |
+|---|---|---|
+| Send message | 200–400 tokens (full message object) | ~7 tokens (`sent <ts>`) |
+| Read 3 messages | 1000–2000 tokens (full metadata each) | ~150 tokens (concise JSON) |
+| Search users | 500+ tokens per user (profile + avatars + tz) | ~20 tokens per user (`name id extra`) |
+| Delete a message | Full envelope echo | ~2 tokens (`delete ok`) |
+
+Why the gap:
+
+1. **No persistent tool schema.** `slk` is invoked via `Bash`; the agent does not carry the
+   13 MCP tool schemas (~5–10 K tokens) in its context.
+2. **Curated by default.** Every read command renders a concise summary; `--format json` and
+   `--raw` are opt-in for full structure.
+3. **Default ID resolution.** `slk` maps `U…` / `C…` to human-readable names so the model
+   does not need a second round-trip to interpret IDs.
+4. **Shell composability.** Pipe through `jq`, `head`, `grep` to filter bytes before they
+   reach the model.
+5. **Opt-in detail.** `--raw` and `--format json` return the full envelope only when asked;
+   MCP returns it every call.
+
+When MCP is still the better choice:
+
+- The agent cannot execute a shell at all.
+- You need strict JSON-schema contracts for tool-calling integration.
+
+In typical agent workflows the savings compound: roughly **5–20× cheaper per call** and
+**2–5× cheaper across a full session**, depending on how much of the traffic is short
+confirmations and ID-resolved reads — the regime `slk` is designed to shine in.
 
 ## Prerequisites
 
@@ -125,39 +159,8 @@ slk msg send --channel C0123456789 --text "hello"
 slk canvas read --id F0123456789
 ```
 
-## Why slk?
-
-`slk` is built for agent workflows that talk to Slack frequently. Compared to the official
-Slack MCP connector, it is meaningfully cheaper per round-trip:
-
-| Operation | MCP response | `slk` default response |
-|---|---|---|
-| Send message | 200–400 tokens (full message object) | ~7 tokens (`sent <ts>`) |
-| Read 3 messages | 1000–2000 tokens (full metadata each) | ~150 tokens (concise JSON) |
-| Search users | 500+ tokens per user (profile + avatars + tz) | ~20 tokens per user (`name id extra`) |
-| Delete a message | Full envelope echo | ~2 tokens (`delete ok`) |
-
-Why the gap:
-
-1. **No persistent tool schema.** `slk` is invoked via `Bash`; the agent does not carry the
-   13 MCP tool schemas (~5–10 K tokens) in its context.
-2. **Curated by default.** Every read command renders a concise summary; `--format json` and
-   `--raw` are opt-in for full structure.
-3. **Default ID resolution.** `slk` maps `U…` / `C…` to human-readable names so the model
-   does not need a second round-trip to interpret IDs.
-4. **Shell composability.** Pipe through `jq`, `head`, `grep` to filter bytes before they
-   reach the model.
-5. **Opt-in detail.** `--raw` and `--format json` return the full envelope only when asked;
-   MCP returns it every call.
-
-When MCP is still the better choice:
-
-- The agent cannot execute a shell at all.
-- You need strict JSON-schema contracts for tool-calling integration.
-
-In typical agent workflows the savings compound: roughly **5–20× cheaper per call** and
-**2–5× cheaper across a full session**, depending on how much of the traffic is short
-confirmations and ID-resolved reads — the regime `slk` is designed to shine in.
+The token in the second Quick start command comes from the
+[Authentication](#authentication) steps below.
 
 ## Authentication
 
@@ -166,55 +169,112 @@ client secret.
 
 ### 1. Create your Slack app
 
-Visit <https://api.slack.com/apps> → **Create New App** → **From scratch**. Pick a workspace.
+Visit <https://api.slack.com/apps> → **Create New App**. Two paths:
 
-### 2. Add OAuth scopes
+- **From an app manifest** (recommended) — pick your workspace, paste the JSON manifest below
+  into the editor (it opens in JSON; YAML also works), and create the app. It pre-fills every
+  scope `slk` uses, so you can skip step 2 and go straight to installing.
+- **From scratch** — pick a name and workspace, then add scopes by hand in step 2.
 
-Under **OAuth & Permissions** → **User Token Scopes**, add the scopes you need. The full set
-used by `slk`'s curated commands:
+The manifest's `user:` list is every scope `slk`'s curated commands can use. Not every
+command needs every scope; trim the list to the subset you actually run.
 
+```json
+{
+  "display_information": {
+    "name": "slk"
+  },
+  "oauth_config": {
+    "scopes": {
+      "user": [
+        "channels:history",
+        "channels:read",
+        "channels:write",
+        "groups:history",
+        "groups:read",
+        "groups:write",
+        "im:history",
+        "im:read",
+        "im:write",
+        "mpim:history",
+        "mpim:read",
+        "mpim:write",
+        "chat:write",
+        "reactions:read",
+        "reactions:write",
+        "search:read",
+        "users:read",
+        "users:write",
+        "users.profile:read",
+        "users.profile:write",
+        "files:read",
+        "files:write",
+        "canvases:read",
+        "canvases:write",
+        "lists:read",
+        "lists:write",
+        "pins:read",
+        "pins:write",
+        "bookmarks:read",
+        "bookmarks:write",
+        "team:read",
+        "emoji:read",
+        "dnd:read",
+        "dnd:write",
+        "usergroups:read",
+        "usergroups:write"
+      ]
+    }
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}
 ```
-channels:history channels:read channels:write
-groups:history   groups:read   groups:write
-im:history       im:read       im:write
-mpim:history     mpim:read     mpim:write
-chat:write
-reactions:read   reactions:write
-search:read
-users:read       users:write   users.profile:read users.profile:write
-files:read       files:write
-canvases:read    canvases:write
-lists:read       lists:write
-pins:read        pins:write
-bookmarks:read   bookmarks:write
-team:read        emoji:read
-dnd:read         dnd:write
-usergroups:read  usergroups:write
-```
 
-Not every command needs every scope — grant only the subset for the commands you use.
-This is also the default set `slk auth login` requests.
+### 2. Optional — Add or edit OAuth scopes (skip if you created from the manifest)
 
-You can paste an equivalent **App Manifest** into the same UI to add them in one shot.
+Under **OAuth & Permissions** → **User Token Scopes**, add scopes one at a time, choosing the
+ones you need from the `user:` list above.
+
+To change scopes on an app you already created, open **Features → App Manifest** in the app's
+settings, edit the `user:` list there, and **Save Changes** — Slack applies the diff and
+prompts you to reinstall if you added new scopes.
 
 ### 3. Install to your workspace, copy the token
 
-Click **Install to \<Workspace\>**. After approval, copy the **User OAuth Token** (begins with
-`xoxp-`). Some workspaces require an admin to approve the install.
+On the **OAuth & Permissions** page (the same one as step 2), scroll to the top and click
+**Install to Workspace**. Approve the prompt; the **User OAuth Token** (`xoxp-…`) then appears
+at the top of that page — copy it. Some workspaces require an admin to approve the install.
 
 ### 4. Store the token in `slk`
 
 ```bash
-# Paste a token directly
 slk auth set-token --profile work --workspace acme --user xoxp-...
-
-# Or run the OAuth flow (requires your own client_id / client_secret)
-slk auth login --profile work --client-id ... --client-secret ...
 ```
+
+To keep the token out of your shell history, omit `--user` and run it in a terminal — `slk`
+prompts for each missing field and hides the token as you paste it. For scripts, pipe the
+token in instead: `printf '%s' "$TOKEN" | slk auth set-token --profile work --user -`.
 
 Tokens land in `~/.config/slk/config.toml` (mode `0600`) and are encrypted at rest (see
 [Credential storage](#credential-storage)). `slk` never prints token contents; `slk auth
 status` shows presence booleans only.
+
+### 5. Verify it worked
+
+```bash
+slk auth status   # stored locally? lists the profile with user=true + decryption health
+slk auth test     # valid on Slack? prints your live team and user identity
+```
+
+`slk auth status` shows each profile as `<name> (workspace=… user=true bot=false)` plus the
+encryption backend — it never prints the token itself. `slk auth test` calls Slack's
+`auth.test` and, on success, prints `<team> (<team_id>) — <user> (<user_id>) @ <url>`. A bad
+token returns an auth error (`invalid_auth` / `not_authed`) and exits `3` — re-check the
+token and redo step 4.
 
 ### Credential storage
 
