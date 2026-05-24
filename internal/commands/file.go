@@ -32,7 +32,12 @@ func newFileListCommand(g *GlobalFlags) *cobra.Command {
 		Use:   "list",
 		Short: "List files",
 		// --raw is not offered here: a multi-page response has no single raw envelope.
-		Annotations: map[string]string{"slackMethod": "files.list"},
+		Annotations: map[string]string{
+			"slackMethod": "files.list",
+			"userScopes":  "files:read",
+			"botScopes":   "files:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -120,7 +125,12 @@ func newFileInfoCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "info",
 		Short:       "Show file details",
-		Annotations: map[string]string{"slackMethod": "files.info"},
+		Annotations: map[string]string{
+			"slackMethod": "files.info",
+			"userScopes":  "files:read",
+			"botScopes":   "files:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -154,6 +164,9 @@ func newFileUploadCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "files.getUploadURLExternal",
 			"write":       "true",
+			"userScopes":  "files:write",
+			"botScopes":   "files:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if g.DryRun {
@@ -246,6 +259,9 @@ func newFileDeleteCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "files.delete",
 			"write":       "true",
+			"userScopes":  "files:write",
+			"botScopes":   "files:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"file": fileID}
@@ -283,6 +299,9 @@ func newFilePublicCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "files.sharedPublicURL",
 			"write":       "true",
+			"userScopes":  "files:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"file": fileID}
@@ -319,6 +338,9 @@ func newFileRevokePublicCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "files.revokePublicURL",
 			"write":       "true",
+			"userScopes":  "files:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"file": fileID}

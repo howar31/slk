@@ -41,7 +41,12 @@ func newSearchMessagesCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "messages",
 		Short:       "Search messages (requires a user token)",
-		Annotations: map[string]string{"slackMethod": "search.messages"},
+		Annotations: map[string]string{
+			"slackMethod": "search.messages",
+			"userScopes":  "search:read",
+			"botScopes":   "",
+			"botCapable":  "false",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -91,7 +96,12 @@ func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "channels",
 		Short:       "List/search channels (client-side filter)",
-		Annotations: map[string]string{"slackMethod": "conversations.list"},
+		Annotations: map[string]string{
+			"slackMethod": "conversations.list",
+			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
+			"botScopes":   "channels:read,groups:read,im:read,mpim:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(cmd, g)
@@ -153,7 +163,12 @@ func newSearchUsersCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "users",
 		Short:       "List/search workspace users (client-side filter)",
-		Annotations: map[string]string{"slackMethod": "users.list"},
+		Annotations: map[string]string{
+			"slackMethod": "users.list",
+			"userScopes":  "users:read",
+			"botScopes":   "users:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(cmd, g)
@@ -187,7 +202,12 @@ func newSearchFilesCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "files",
 		Short:       "Search files (requires a user token)",
-		Annotations: map[string]string{"slackMethod": "search.files"},
+		Annotations: map[string]string{
+			"slackMethod": "search.files",
+			"userScopes":  "search:read",
+			"botScopes":   "",
+			"botCapable":  "false",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -240,7 +260,12 @@ func newSearchAllCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "all",
 		Short:       "Search messages and files combined (requires a user token)",
-		Annotations: map[string]string{"slackMethod": "search.all"},
+		Annotations: map[string]string{
+			"slackMethod": "search.all",
+			"userScopes":  "search:read",
+			"botScopes":   "",
+			"botCapable":  "false",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {

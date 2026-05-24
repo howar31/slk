@@ -61,7 +61,12 @@ func newUserListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List workspace users",
-		Annotations: map[string]string{"slackMethod": "users.list"},
+		Annotations: map[string]string{
+			"slackMethod": "users.list",
+			"userScopes":  "users:read",
+			"botScopes":   "users:read",
+			"botCapable":  "true",
+		},
 		Long: `List workspace users.
 
 By default the output excludes bot users and deactivated accounts, which are
@@ -168,7 +173,12 @@ func newUserInfoCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "info",
 		Short:       "Show one user's profile",
-		Annotations: map[string]string{"slackMethod": "users.info"},
+		Annotations: map[string]string{
+			"slackMethod": "users.info",
+			"userScopes":  "users:read",
+			"botScopes":   "users:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -222,7 +232,12 @@ func newUserByEmailCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "by-email",
 		Short:       "Look up a user by email address",
-		Annotations: map[string]string{"slackMethod": "users.lookupByEmail"},
+		Annotations: map[string]string{
+			"slackMethod": "users.lookupByEmail",
+			"userScopes":  "users:read.email",
+			"botScopes":   "users:read.email",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -263,7 +278,12 @@ func newUserPresenceCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "presence",
 		Short:       "Get a user's presence status",
-		Annotations: map[string]string{"slackMethod": "users.getPresence"},
+		Annotations: map[string]string{
+			"slackMethod": "users.getPresence",
+			"userScopes":  "users:read",
+			"botScopes":   "users:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -316,7 +336,12 @@ func newUserChannelsCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "channels",
 		Short:       "List channels a user belongs to",
-		Annotations: map[string]string{"slackMethod": "users.conversations"},
+		Annotations: map[string]string{
+			"slackMethod": "users.conversations",
+			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
+			"botScopes":   "channels:read,groups:read,im:read,mpim:read",
+			"botCapable":  "true",
+		},
 		// --raw is not offered here: a multi-page response has no single raw envelope.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
@@ -358,6 +383,9 @@ func newUserSetProfileCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "users.profile.set",
 			"write":       "true",
+			"userScopes":  "users.profile:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{}
@@ -401,6 +429,9 @@ func newUserSetPhotoCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "users.setPhoto",
 			"write":       "true",
+			"userScopes":  "users.profile:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if g.DryRun {
@@ -439,6 +470,9 @@ func newUserDeletePhotoCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "users.deletePhoto",
 			"write":       "true",
+			"userScopes":  "users.profile:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{}
@@ -473,6 +507,9 @@ func newUserSetPresenceCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "users.setPresence",
 			"write":       "true",
+			"userScopes":  "users:write",
+			"botScopes":   "users:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"presence": presence}
@@ -507,7 +544,12 @@ func newUserProfileCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "profile",
 		Short:       "Show a user's profile fields",
-		Annotations: map[string]string{"slackMethod": "users.profile.get"},
+		Annotations: map[string]string{
+			"slackMethod": "users.profile.get",
+			"userScopes":  "users.profile:read",
+			"botScopes":   "users.profile:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {

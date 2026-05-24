@@ -26,6 +26,9 @@ func newPinAddCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "pins.add",
 			"write":       "true",
+			"userScopes":  "pins:write",
+			"botScopes":   "pins:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "timestamp": ts}
@@ -64,6 +67,9 @@ func newPinRemoveCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "pins.remove",
 			"write":       "true",
+			"userScopes":  "pins:write",
+			"botScopes":   "pins:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "timestamp": ts}
@@ -99,7 +105,12 @@ func newPinListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List pinned items in a channel",
-		Annotations: map[string]string{"slackMethod": "pins.list"},
+		Annotations: map[string]string{
+			"slackMethod": "pins.list",
+			"userScopes":  "pins:read",
+			"botScopes":   "pins:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {

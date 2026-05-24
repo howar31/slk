@@ -34,7 +34,12 @@ func newAuthTestCommand(g *GlobalFlags) *cobra.Command {
 	return &cobra.Command{
 		Use:         "test",
 		Short:       "Verify the active token and show its live identity",
-		Annotations: map[string]string{"slackMethod": "auth.test"},
+		Annotations: map[string]string{
+			"slackMethod": "auth.test",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -82,6 +87,9 @@ func newAuthRevokeCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "auth.revoke",
 			"write":       "true",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
 		},
 		Long: "Revoke the active token at Slack. This invalidates the token server-side; " +
 			"it does not remove the local profile (use `auth logout` for that).",
@@ -311,6 +319,12 @@ func newAuthStatusCommand(g *GlobalFlags) *cobra.Command {
 		Long: "Show configured profiles with a derived [user]/[bot] scope label. By default the " +
 			"active profile is verified live (auth.test); --all verifies every profile, --offline " +
 			"skips the network. --format json emits a structured object.",
+		Annotations: map[string]string{
+			"slackMethod": "auth.test",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, cfg, err := loadConfig()
 			if err != nil {
@@ -457,6 +471,12 @@ func newAuthLoginCommand(g *GlobalFlags) *cobra.Command {
 			"for scripts/agents, or run with missing fields in a terminal to be prompted (the " +
 			"client secret is entered hidden). Use --as bot to mint a bot token instead of a " +
 			"user token.",
+		Annotations: map[string]string{
+			"slackMethod": "oauth.v2.access",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pc := newPromptCtx(cmd, nonInteractive)
 			flags := cmd.Flags()

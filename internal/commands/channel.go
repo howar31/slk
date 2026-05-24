@@ -38,7 +38,12 @@ func newChannelListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List channels",
-		Annotations: map[string]string{"slackMethod": "conversations.list"},
+		Annotations: map[string]string{
+			"slackMethod": "conversations.list",
+			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
+			"botScopes":   "channels:read,groups:read,im:read,mpim:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --raw is not offered here: a multi-page response has no single raw envelope.
 			client, err := buildClient(cmd, g)
@@ -82,6 +87,9 @@ func newChannelCreateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.create",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"name": name}
@@ -128,6 +136,9 @@ func newChannelArchiveCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.archive",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
@@ -164,6 +175,9 @@ func newChannelInviteCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.invite",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		Long: "Invite users to a channel. Cannot invite a channel's creator or an existing member (Slack returns cant_invite_self / already_in_channel).",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -203,6 +217,9 @@ func newChannelTopicCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.setTopic",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "topic": topic}
@@ -279,7 +296,12 @@ func newChannelInfoCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "info",
 		Short:       "Show channel details",
-		Annotations: map[string]string{"slackMethod": "conversations.info"},
+		Annotations: map[string]string{
+			"slackMethod": "conversations.info",
+			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
+			"botScopes":   "channels:read,groups:read,im:read,mpim:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -311,7 +333,12 @@ func newChannelMembersCommand(g *GlobalFlags) *cobra.Command {
 		Use:   "members",
 		Short: "List channel members",
 		// --raw is not offered here: a multi-page response has no single raw envelope.
-		Annotations: map[string]string{"slackMethod": "conversations.members"},
+		Annotations: map[string]string{
+			"slackMethod": "conversations.members",
+			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
+			"botScopes":   "channels:read,groups:read,im:read,mpim:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -351,6 +378,9 @@ func newChannelJoinCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.join",
 			"write":       "true",
+			"userScopes":  "channels:write",
+			"botScopes":   "channels:join",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
@@ -387,6 +417,9 @@ func newChannelLeaveCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.leave",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
@@ -423,6 +456,9 @@ func newChannelPurposeCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.setPurpose",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "purpose": purpose}
@@ -461,6 +497,9 @@ func newChannelKickCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.kick",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "user": user}
@@ -499,6 +538,9 @@ func newChannelRenameCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.rename",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "name": name}
@@ -537,6 +579,9 @@ func newChannelUnarchiveCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.unarchive",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
@@ -573,6 +618,9 @@ func newChannelOpenCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.open",
 			"write":       "true",
+			"userScopes":  "im:write,mpim:write",
+			"botScopes":   "im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"users": users}
@@ -617,6 +665,9 @@ func newChannelMarkCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.mark",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "ts": ts}
@@ -655,6 +706,9 @@ func newChannelCloseCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.close",
 			"write":       "true",
+			"userScopes":  "im:write,mpim:write",
+			"botScopes":   "im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}

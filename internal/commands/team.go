@@ -39,7 +39,12 @@ func newTeamInfoCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "info",
 		Short:       "Show workspace info",
-		Annotations: map[string]string{"slackMethod": "team.info"},
+		Annotations: map[string]string{
+			"slackMethod": "team.info",
+			"userScopes":  "team:read",
+			"botScopes":   "team:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -94,7 +99,12 @@ func newTeamProfileCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "profile",
 		Short:       "List workspace profile fields",
-		Annotations: map[string]string{"slackMethod": "team.profile.get"},
+		Annotations: map[string]string{
+			"slackMethod": "team.profile.get",
+			"userScopes":  "users.profile:read",
+			"botScopes":   "users.profile:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {

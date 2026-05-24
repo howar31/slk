@@ -27,6 +27,9 @@ func newBookmarkAddCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "bookmarks.add",
 			"write":       "true",
+			"userScopes":  "bookmarks:write",
+			"botScopes":   "bookmarks:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{
@@ -73,6 +76,9 @@ func newBookmarkEditCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "bookmarks.edit",
 			"write":       "true",
+			"userScopes":  "bookmarks:write",
+			"botScopes":   "bookmarks:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{
@@ -123,6 +129,9 @@ func newBookmarkRemoveCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "bookmarks.remove",
 			"write":       "true",
+			"userScopes":  "bookmarks:write",
+			"botScopes":   "bookmarks:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{
@@ -161,7 +170,12 @@ func newBookmarkListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List bookmarks in a channel",
-		Annotations: map[string]string{"slackMethod": "bookmarks.list"},
+		Annotations: map[string]string{
+			"slackMethod": "bookmarks.list",
+			"userScopes":  "bookmarks:read",
+			"botScopes":   "bookmarks:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {

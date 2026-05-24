@@ -39,7 +39,12 @@ func newEmojiListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List custom emoji",
-		Annotations: map[string]string{"slackMethod": "emoji.list"},
+		Annotations: map[string]string{
+			"slackMethod": "emoji.list",
+			"userScopes":  "emoji:read",
+			"botScopes":   "emoji:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {

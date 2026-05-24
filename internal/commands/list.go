@@ -77,6 +77,9 @@ func newListCreateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.create",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		Long: "Create a Slack List. Lists cannot be deleted via the public API (slackLists.delete does not exist) — remove them in the Slack UI.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -121,7 +124,12 @@ func newListReadCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "read",
 		Short:       "Read items in a List",
-		Annotations: map[string]string{"slackMethod": "slackLists.items.list"},
+		Annotations: map[string]string{
+			"slackMethod": "slackLists.items.list",
+			"userScopes":  "lists:read",
+			"botScopes":   "lists:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -156,6 +164,9 @@ func newListAddItemCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.items.create",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"list_id": listID, "initial_fields": fieldsJSON}
@@ -194,6 +205,9 @@ func newListUpdateItemCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.items.update",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cells, err := injectRowID(fieldsJSON, rowID)
@@ -241,6 +255,9 @@ func newListDeleteItemCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.items.delete",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		Long: "Deletes one List item. The whole-list delete API (slackLists.delete) does not exist — remove a List in the Slack UI.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -280,6 +297,9 @@ func newListUpdateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.update",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"id": listID}

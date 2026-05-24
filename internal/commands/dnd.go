@@ -80,7 +80,12 @@ func newDndInfoCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "info",
 		Short:       "Show DND status for a user (or the caller)",
-		Annotations: map[string]string{"slackMethod": "dnd.info"},
+		Annotations: map[string]string{
+			"slackMethod": "dnd.info",
+			"userScopes":  "dnd:read",
+			"botScopes":   "dnd:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -114,7 +119,12 @@ func newDndTeamCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "team",
 		Short:       "Show DND status for a comma-separated list of users",
-		Annotations: map[string]string{"slackMethod": "dnd.teamInfo"},
+		Annotations: map[string]string{
+			"slackMethod": "dnd.teamInfo",
+			"userScopes":  "dnd:read",
+			"botScopes":   "dnd:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -148,6 +158,9 @@ func newDndSnoozeCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "dnd.setSnooze",
 			"write":       "true",
+			"userScopes":  "dnd:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"num_minutes": fmt.Sprintf("%d", minutes)}
@@ -183,6 +196,9 @@ func newDndEndSnoozeCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "dnd.endSnooze",
 			"write":       "true",
+			"userScopes":  "dnd:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{}
@@ -216,6 +232,9 @@ func newDndEndCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "dnd.endDnd",
 			"write":       "true",
+			"userScopes":  "dnd:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{}

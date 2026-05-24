@@ -62,7 +62,12 @@ func newUsergroupListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List user groups",
-		Annotations: map[string]string{"slackMethod": "usergroups.list"},
+		Annotations: map[string]string{
+			"slackMethod": "usergroups.list",
+			"userScopes":  "usergroups:read",
+			"botScopes":   "usergroups:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -94,6 +99,9 @@ func newUsergroupCreateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "usergroups.create",
 			"write":       "true",
+			"userScopes":  "usergroups:write",
+			"botScopes":   "usergroups:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"name": name}
@@ -138,6 +146,9 @@ func newUsergroupUpdateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "usergroups.update",
 			"write":       "true",
+			"userScopes":  "usergroups:write",
+			"botScopes":   "usergroups:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"usergroup": usergroup}
@@ -182,6 +193,9 @@ func newUsergroupEnableCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "usergroups.enable",
 			"write":       "true",
+			"userScopes":  "usergroups:write",
+			"botScopes":   "usergroups:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"usergroup": usergroup}
@@ -218,6 +232,9 @@ func newUsergroupDisableCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "usergroups.disable",
 			"write":       "true",
+			"userScopes":  "usergroups:write",
+			"botScopes":   "usergroups:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"usergroup": usergroup}
@@ -251,7 +268,12 @@ func newUsergroupUsersCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "users",
 		Short:       "List members of a user group",
-		Annotations: map[string]string{"slackMethod": "usergroups.users.list"},
+		Annotations: map[string]string{
+			"slackMethod": "usergroups.users.list",
+			"userScopes":  "usergroups:read",
+			"botScopes":   "usergroups:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -285,6 +307,9 @@ func newUsergroupSetUsersCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "usergroups.users.update",
 			"write":       "true",
+			"userScopes":  "usergroups:write",
+			"botScopes":   "usergroups:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"usergroup": usergroup, "users": users}

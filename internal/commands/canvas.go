@@ -51,6 +51,9 @@ func newCanvasCreateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "canvases.create",
 			"write":       "true",
+			"userScopes":  "canvases:write",
+			"botScopes":   "canvases:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(markdown, markdownFile, "--markdown", "--markdown-file")
@@ -98,7 +101,12 @@ func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "read",
 		Short:       "Read a canvas as markdown (HTML-converted)",
-		Annotations: map[string]string{"slackMethod": "files.info"},
+		Annotations: map[string]string{
+			"slackMethod": "files.info",
+			"userScopes":  "files:read,canvases:read",
+			"botScopes":   "files:read,canvases:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -178,6 +186,9 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "canvases.edit",
 			"write":       "true",
+			"userScopes":  "canvases:write",
+			"botScopes":   "canvases:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(markdown, markdownFile, "--markdown", "--markdown-file")
@@ -260,6 +271,9 @@ func newCanvasDeleteCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "canvases.delete",
 			"write":       "true",
+			"userScopes":  "canvases:write",
+			"botScopes":   "canvases:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"canvas_id": canvasID}
@@ -296,6 +310,9 @@ func newCanvasShareCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "canvases.access.set",
 			"write":       "true",
+			"userScopes":  "canvases:write",
+			"botScopes":   "canvases:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// canvases.access.set accepts exactly one of user_ids / channel_ids
@@ -349,6 +366,9 @@ func newCanvasUnshareCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "canvases.access.delete",
 			"write":       "true",
+			"userScopes":  "canvases:write",
+			"botScopes":   "canvases:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Mirror `share`: exactly one of user_ids / channel_ids per request.
@@ -394,7 +414,12 @@ func newCanvasListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "list",
 		Short:       "List canvases via search.files",
-		Annotations: map[string]string{"slackMethod": "search.files"},
+		Annotations: map[string]string{
+			"slackMethod": "search.files",
+			"userScopes":  "search:read",
+			"botScopes":   "",
+			"botCapable":  "false",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {

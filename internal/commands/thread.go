@@ -20,7 +20,12 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:         "read",
 		Short:       "Read replies in a thread",
-		Annotations: map[string]string{"slackMethod": "conversations.replies"},
+		Annotations: map[string]string{
+			"slackMethod": "conversations.replies",
+			"userScopes":  "channels:history,groups:history,im:history,mpim:history",
+			"botScopes":   "channels:history,groups:history,im:history,mpim:history",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			client, err := buildClient(cmd, g)
 			if err != nil {
@@ -81,6 +86,9 @@ func newThreadReplyCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "chat.postMessage",
 			"write":       "true",
+			"userScopes":  "chat:write",
+			"botScopes":   "chat:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
