@@ -42,6 +42,7 @@ exposes `--raw` when a caller wants full API responses.
   - [Escape hatch — `slk api`](#escape-hatch--slk-api)
 - [Environment variables](#environment-variables)
 - [Exit codes](#exit-codes)
+- [Bot mode](#bot-mode)
 - [Known Slack-side limitations](#known-slack-side-limitations)
 - [Team setup](#team-setup)
 - [Development](#development)
