@@ -583,6 +583,37 @@ slk api canvases.sections.lookup \
 | `4` | Not found (`channel_not_found`, `user_not_found`, `message_not_found`, …). |
 | `5` | Rate limited after the retry budget was exhausted. |
 
+## Bot mode
+
+A bot token (`xoxb-`) is the **automation subset** of user mode, not a parallel replacement.
+The write-heavy core — posting, scheduling, reactions, channel management, canvas, Slack Lists,
+file upload, pins, bookmarks — works fully. Three areas degrade or vanish:
+
+- ❌ **Not available under a bot:** `search messages` / `search files` / `search all` and
+  `canvas list` (all rely on the Search API, which is user-token-only); `user set-profile` /
+  `set-photo` / `delete-photo` (personal profile writes); `dnd snooze` / `end-snooze` / `end`
+  (DND state is per-user); `file public` / `revoke-public`; `msg draft`. (`user set-presence`
+  runs but has no effect for a bot.)
+- ⚠️ **Reduced effect:** `msg read` and `thread read` only see channels the bot has joined
+  (DM history is limited to the bot's own DMs); `msg update`, `msg delete`, and `file delete`
+  only operate on the bot's own messages or files.
+- ✅ **Everything else** works the same as user mode. The `bot:` scope list in the app manifest
+  above is the live reference for what the bot token covers; per-verb flags are in `--help`.
+
+**Getting a bot token — two paths:**
+
+```bash
+# OAuth flow — slk mints the xoxb- through your browser:
+slk auth login --as bot --client-id <id> --client-secret <secret>
+
+# Paste flow — copy the Bot User OAuth Token (xoxb-...) from the app's
+# OAuth & Permissions page, then store it:
+slk auth set-token --token xoxb-...
+```
+
+Both paths store the token in the same profile alongside your user token (if any).
+`slk auth status` will show `bot=true` once it is in place.
+
 ## Known Slack-side limitations
 
 These behaviors come from Slack itself, not from `slk`:
