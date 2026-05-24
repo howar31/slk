@@ -15,7 +15,7 @@ func TestGlobalFlags_Defaults(t *testing.T) {
 	if g.Format != "concise" {
 		t.Fatalf("default format = %q, want concise", g.Format)
 	}
-	if g.Identity != "user" {
-		t.Fatalf("default identity = %q, want user", g.Identity)
+	if g.Identity != "" {
+		t.Fatalf("default identity = %q, want empty (assertion opt-in)", g.Identity)
 	}
 }
