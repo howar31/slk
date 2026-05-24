@@ -16,24 +16,6 @@ import (
 	"github.com/howar31/slk/internal/auth"
 )
 
-func TestAuthLogin_DefaultScopesIncludeExpanded(t *testing.T) {
-	cmd := newAuthCommand(&GlobalFlags{})
-	login, _, err := cmd.Find([]string{"login"})
-	if err != nil {
-		t.Fatalf("find login: %v", err)
-	}
-	def := login.Flags().Lookup("scopes").DefValue
-	for _, s := range []string{
-		"reactions:read", "files:write", "users.profile:write",
-		"pins:read", "pins:write", "bookmarks:read", "bookmarks:write",
-		"team:read", "emoji:read", "users:write", "dnd:read", "dnd:write",
-		"usergroups:read", "usergroups:write",
-	} {
-		if !strings.Contains(def, s) {
-			t.Errorf("default scopes missing %q", s)
-		}
-	}
-}
 
 func TestFormatAuthIdentity(t *testing.T) {
 	raw := []byte(`{"ok":true,"url":"https://acme.slack.com/","team":"acme","user":"alice","team_id":"T0123456789","user_id":"U0123456789"}`)
@@ -788,6 +770,35 @@ func TestLogin_BotMintStoresBotToken(t *testing.T) {
 	cfg, _ := auth.Load(filepath.Join(dir, "config.toml"))
 	if got := cfg.Profiles["work"].Token; got != "xoxb-b" {
 		t.Fatalf("stored token = %q, want xoxb-b", got)
+	}
+}
+
+// C3: default scopes come from the runtime union, not a static literal.
+func TestLogin_DefaultScopesFromUnion(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml"))
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+
+	origWait, origExch := waitForCode, exchangeCode
+	defer func() { waitForCode, exchangeCode = origWait, origExch }()
+	waitForCode = func(addr, path string) (string, error) { return "c", nil }
+	exchangeCode = func(base, id, secret, code, redirect string) (auth.TokenPair, error) {
+		return auth.TokenPair{UserToken: "xoxp-u"}, nil
+	}
+
+	root := NewRootCommand("test")
+	var out bytes.Buffer
+	root.SetOut(&out)
+	// No --scopes: the authorize URL must carry the generated user union.
+	root.SetArgs([]string{"auth", "login",
+		"--client-id", "x", "--client-secret", "y", "--non-interactive"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	// users:read.email is only present if the default came from the union, not
+	// the removed legacy literal.
+	if !strings.Contains(out.String(), "users%3Aread.email") {
+		t.Fatalf("authorize URL missing generated scope; got:\n%s", out.String())
 	}
 }
 

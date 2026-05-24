@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -509,15 +510,20 @@ func newAuthLoginCommand(g *GlobalFlags) *cobra.Command {
 				return fmt.Errorf("--as must be user or bot")
 			}
 
+			scopeList := scopes
+			if !flags.Changed("scopes") {
+				scopeList = strings.Join(scopeUnion(cmd.Root(), mint), ",")
+			}
+
 			redirectURI := "http://localhost:" + port + "/callback"
 			q := url.Values{
 				"client_id":    {id},
 				"redirect_uri": {redirectURI},
 			}
 			if mint == "bot" {
-				q.Set("scope", scopes)
+				q.Set("scope", scopeList)
 			} else {
-				q.Set("user_scope", scopes)
+				q.Set("user_scope", scopeList)
 			}
 			authURL := "https://slack.com/oauth/v2/authorize?" + q.Encode()
 			fmt.Fprintf(cmd.OutOrStdout(), "Open this URL to authorize:\n%s\n", authURL)
@@ -563,8 +569,7 @@ func newAuthLoginCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&profile, "profile", "default", "profile name")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "your Slack app client ID")
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "your Slack app client secret")
-	// Keep the static 36-scope literal default for now (C3 replaces with runtime union).
-	cmd.Flags().StringVar(&scopes, "scopes", "channels:history,channels:read,channels:write,groups:history,groups:read,groups:write,im:history,im:read,im:write,mpim:history,mpim:read,mpim:write,chat:write,reactions:write,reactions:read,search:read,users:read,users:write,users.profile:read,users.profile:write,files:read,files:write,canvases:read,canvases:write,lists:read,lists:write,pins:read,pins:write,bookmarks:read,bookmarks:write,team:read,emoji:read,dnd:read,dnd:write,usergroups:read,usergroups:write", "comma-separated scopes to request")
+	cmd.Flags().StringVar(&scopes, "scopes", "", "comma-separated scopes to request (default: generated from supported commands for the chosen identity)")
 	cmd.Flags().StringVar(&port, "port", "3000", "local callback port")
 	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "never prompt; require values via flags")
 	return cmd
