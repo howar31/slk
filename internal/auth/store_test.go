@@ -7,6 +7,30 @@ import (
 	"testing"
 )
 
+// TestLoad_LegacyDualTokenIgnored locks the clean-break migration (design §8):
+// a pre-decouple config with the old user_token/bot_token keys loads without
+// error, those keys are ignored, and the profile resolves to a clean "no token"
+// error rather than crashing or resurrecting a stale credential.
+func TestLoad_LegacyDualTokenIgnored(t *testing.T) {
+	t.Setenv(keyEnvVar, backendFile)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	legacy := "active = \"work\"\nkey_backend = \"file\"\n\n[profiles.work]\nuser_token = \"xoxp-old\"\nbot_token = \"xoxb-old\"\n"
+	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := cfg.Profiles["work"].Token; got != "" {
+		t.Fatalf("legacy user_token/bot_token must be ignored, got Token=%q", got)
+	}
+	if _, err := ResolveToken(cfg, "work", "", ""); err == nil {
+		t.Fatal("expected a 'no token' error for a legacy-only profile")
+	}
+}
+
 func TestStore_SaveLoadRoundTrip(t *testing.T) {
 	t.Setenv(keyEnvVar, backendFile)
 	dir := t.TempDir()
