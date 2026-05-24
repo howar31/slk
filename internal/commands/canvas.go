@@ -65,7 +65,7 @@ func newCanvasCreateCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] canvases.create title=%q\n", title)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -100,7 +100,7 @@ func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Read a canvas as markdown (HTML-converted)",
 		Annotations: map[string]string{"slackMethod": "files.info"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -227,7 +227,7 @@ func newCanvasUpdateCommand(g *GlobalFlags) *cobra.Command {
 			changes, _ := json.Marshal([]map[string]any{change})
 			params := map[string]string{"canvas_id": canvasID, "changes": string(changes)}
 
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -267,7 +267,7 @@ func newCanvasDeleteCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] canvases.delete %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -316,7 +316,7 @@ func newCanvasShareCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] canvases.access.set %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -365,7 +365,7 @@ func newCanvasUnshareCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] canvases.access.delete %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -396,7 +396,7 @@ func newCanvasListCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "List canvases via search.files",
 		Annotations: map[string]string{"slackMethod": "search.files"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

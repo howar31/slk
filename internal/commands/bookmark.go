@@ -39,7 +39,7 @@ func newBookmarkAddCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] bookmarks.add %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -90,7 +90,7 @@ func newBookmarkEditCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] bookmarks.edit %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -133,7 +133,7 @@ func newBookmarkRemoveCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] bookmarks.remove %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -163,7 +163,7 @@ func newBookmarkListCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "List bookmarks in a channel",
 		Annotations: map[string]string{"slackMethod": "bookmarks.list"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

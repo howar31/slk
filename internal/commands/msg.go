@@ -93,7 +93,7 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Read messages from a channel or DM",
 		Annotations: map[string]string{"slackMethod": "conversations.history"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -172,7 +172,7 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -221,7 +221,7 @@ func newMsgWriteCommand(g *GlobalFlags, use, method string, flags []string) *cob
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] %s %v\n", method, params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -265,7 +265,7 @@ func newMsgUpdateCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.update %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -305,7 +305,7 @@ func newMsgReactCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] reactions.add %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -395,7 +395,7 @@ func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.scheduleMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -453,7 +453,7 @@ func newMsgUnreactCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] reactions.remove %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -494,7 +494,7 @@ func newMsgUnscheduleCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.deleteScheduledMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -548,7 +548,7 @@ func newMsgScheduledCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "List scheduled messages",
 		Annotations: map[string]string{"slackMethod": "chat.scheduledMessages.list"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -582,7 +582,7 @@ func newMsgPermalinkCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Get the permalink for a message",
 		Annotations: map[string]string{"slackMethod": "chat.getPermalink"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -631,7 +631,7 @@ func newMsgEphemeralCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postEphemeral %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -671,7 +671,7 @@ func newMsgMeCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.meMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -725,7 +725,7 @@ func newMsgReactionsCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "List reactions on a message",
 		Annotations: map[string]string{"slackMethod": "reactions.get"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -794,7 +794,7 @@ func newMsgReactedCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "List items the user has reacted to",
 		Annotations: map[string]string{"slackMethod": "reactions.list"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -855,7 +855,7 @@ func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {
 				"is_from_composer": "true",
 			}
 
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

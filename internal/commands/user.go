@@ -69,7 +69,7 @@ usually noise for agent workflows. Pass --include-bots / --include-deactivated
 to bring them back. --raw is not offered here: a multi-page response has no
 single raw envelope.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -170,7 +170,7 @@ func newUserInfoCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Show one user's profile",
 		Annotations: map[string]string{"slackMethod": "users.info"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -224,7 +224,7 @@ func newUserByEmailCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Look up a user by email address",
 		Annotations: map[string]string{"slackMethod": "users.lookupByEmail"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -265,7 +265,7 @@ func newUserPresenceCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Get a user's presence status",
 		Annotations: map[string]string{"slackMethod": "users.getPresence"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -319,7 +319,7 @@ func newUserChannelsCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{"slackMethod": "users.conversations"},
 		// --raw is not offered here: a multi-page response has no single raw envelope.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -371,7 +371,7 @@ func newUserSetProfileCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.profile.set %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -411,7 +411,7 @@ func newUserSetPhotoCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -446,7 +446,7 @@ func newUserDeletePhotoCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.deletePhoto %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -480,7 +480,7 @@ func newUserSetPresenceCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.setPresence %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -509,7 +509,7 @@ func newUserProfileCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Show a user's profile fields",
 		Annotations: map[string]string{"slackMethod": "users.profile.get"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

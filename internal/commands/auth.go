@@ -36,7 +36,7 @@ func newAuthTestCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Verify the active token and show its live identity",
 		Annotations: map[string]string{"slackMethod": "auth.test"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -90,7 +90,7 @@ func newAuthRevokeCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), "[dry-run] auth.revoke")
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

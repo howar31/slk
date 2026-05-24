@@ -34,7 +34,7 @@ func newFileListCommand(g *GlobalFlags) *cobra.Command {
 		// --raw is not offered here: a multi-page response has no single raw envelope.
 		Annotations: map[string]string{"slackMethod": "files.list"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -122,7 +122,7 @@ func newFileInfoCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Show file details",
 		Annotations: map[string]string{"slackMethod": "files.info"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -160,7 +160,7 @@ func newFileUploadCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] files.upload file=%s\n", filePath)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -253,7 +253,7 @@ func newFileDeleteCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] files.delete %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -290,7 +290,7 @@ func newFilePublicCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] files.sharedPublicURL %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -326,7 +326,7 @@ func newFileRevokePublicCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] files.revokePublicURL %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

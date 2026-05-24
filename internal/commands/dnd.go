@@ -82,7 +82,7 @@ func newDndInfoCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Show DND status for a user (or the caller)",
 		Annotations: map[string]string{"slackMethod": "dnd.info"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -116,7 +116,7 @@ func newDndTeamCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Show DND status for a comma-separated list of users",
 		Annotations: map[string]string{"slackMethod": "dnd.teamInfo"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -155,7 +155,7 @@ func newDndSnoozeCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] dnd.setSnooze %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -190,7 +190,7 @@ func newDndEndSnoozeCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] dnd.endSnooze %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -223,7 +223,7 @@ func newDndEndCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] dnd.endDnd %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

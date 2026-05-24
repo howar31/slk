@@ -41,7 +41,7 @@ func newTeamInfoCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Show workspace info",
 		Annotations: map[string]string{"slackMethod": "team.info"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -96,7 +96,7 @@ func newTeamProfileCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "List workspace profile fields",
 		Annotations: map[string]string{"slackMethod": "team.profile.get"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

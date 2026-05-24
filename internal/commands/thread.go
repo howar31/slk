@@ -22,7 +22,7 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 		Short:       "Read replies in a thread",
 		Annotations: map[string]string{"slackMethod": "conversations.replies"},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -92,7 +92,7 @@ func newThreadReplyCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

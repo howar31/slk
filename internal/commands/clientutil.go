@@ -1,11 +1,13 @@
 package commands
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/howar31/slk/internal/api"
 	"github.com/howar31/slk/internal/auth"
+	"github.com/spf13/cobra"
 )
 
 // profileName returns the effective profile: the --profile flag if set,
@@ -17,8 +19,11 @@ func profileName(g *GlobalFlags) string {
 	return os.Getenv("SLK_PROFILE")
 }
 
-// buildClient resolves the active token and returns a ready API client.
-func buildClient(g *GlobalFlags) (*api.Client, error) {
+// buildClient resolves the active token (asserting --as scope) and returns a
+// ready API client. It refuses a user-only verb (botCapable=false) when the
+// resolved token is a bot token, failing fast with an *auth.AuthError (exit 3)
+// instead of surfacing Slack's not_allowed_token_type.
+func buildClient(cmd *cobra.Command, g *GlobalFlags) (*api.Client, error) {
 	path, err := auth.ConfigPath()
 	if err != nil {
 		return nil, err
@@ -30,6 +35,9 @@ func buildClient(g *GlobalFlags) (*api.Client, error) {
 	token, err := auth.ResolveToken(cfg, profileName(g), g.Identity, os.Getenv("SLK_TOKEN"))
 	if err != nil {
 		return nil, err
+	}
+	if auth.TokenScope(token) == "bot" && cmd.Annotations["botCapable"] == "false" {
+		return nil, &auth.AuthError{Reason: fmt.Sprintf("%q is user-token-only; the active profile holds a bot token", cmd.CommandPath())}
 	}
 	return api.New(token), nil
 }
