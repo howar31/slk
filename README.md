@@ -189,6 +189,12 @@ needs every scope; trim the list to the subset you actually run.
   "display_information": {
     "name": "slk"
   },
+  "features": {
+    "bot_user": {
+      "always_online": false,
+      "display_name": "slk"
+    }
+  },
   "oauth_config": {
     "scopes": {
       "user": [

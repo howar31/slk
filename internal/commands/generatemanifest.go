@@ -56,16 +56,28 @@ func renderManifestBlock(root *cobra.Command) (string, error) {
 		User []string `json:"user"`
 		Bot  []string `json:"bot"`
 	}
+	botScopes := scopeUnion(root, "bot")
 	manifest := map[string]any{
 		"display_information": map[string]any{"name": "slk"},
 		"oauth_config": map[string]any{
-			"scopes": scopes{User: scopeUnion(root, "user"), Bot: scopeUnion(root, "bot")},
+			"scopes": scopes{User: scopeUnion(root, "user"), Bot: botScopes},
 		},
 		"settings": map[string]any{
 			"org_deploy_enabled":     false,
 			"socket_mode_enabled":    false,
 			"token_rotation_enabled": false,
 		},
+	}
+	// Slack's "create app from manifest" form rejects bot scopes unless a bot
+	// user is also declared ("Oauth requires bot_user"), so emit one whenever
+	// the command tree contributes any bot scopes.
+	if len(botScopes) > 0 {
+		manifest["features"] = map[string]any{
+			"bot_user": map[string]any{
+				"display_name":  "slk",
+				"always_online": false,
+			},
+		}
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
