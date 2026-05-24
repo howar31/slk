@@ -332,12 +332,11 @@ func newAuthStatusCommand(g *GlobalFlags) *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
-			if len(cfg.Profiles) == 0 {
-				if g.Format == "json" {
-					fmt.Fprintln(out, `{"profiles":[]}`)
-				} else {
-					fmt.Fprintln(out, "no profiles configured")
-				}
+			// Empty config: the human path prints a friendly line; the JSON path
+			// falls through to the main logic so it emits the full schema
+			// (encryption + active + empty profiles), consistent for callers.
+			if len(cfg.Profiles) == 0 && g.Format != "json" {
+				fmt.Fprintln(out, "no profiles configured")
 				return nil
 			}
 

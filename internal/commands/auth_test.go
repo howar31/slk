@@ -619,6 +619,30 @@ func TestAuthStatus_JSONOffline(t *testing.T) {
 	}
 }
 
+func TestAuthStatus_JSONNoProfilesFullSchema(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SLK_CONFIG", filepath.Join(dir, "config.toml")) // no config file → no profiles
+	t.Setenv("SLK_KEYRING_BACKEND", "file")
+	root := NewRootCommand("test")
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetArgs([]string{"auth", "status", "--format", "json"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	// Empty config must still emit the full schema (encryption + active + profiles),
+	// not a reduced object, so JSON consumers see one consistent shape.
+	var got map[string]json.RawMessage
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, out.String())
+	}
+	for _, key := range []string{"encryption", "active", "profiles"} {
+		if _, ok := got[key]; !ok {
+			t.Fatalf("empty-config json missing %q field: %s", key, out.String())
+		}
+	}
+}
+
 func TestAuthLogin_NonInteractiveFlagRegistered(t *testing.T) {
 	cmd := newAuthCommand(&GlobalFlags{})
 	login, _, err := cmd.Find([]string{"login"})
