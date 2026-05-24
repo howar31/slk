@@ -76,8 +76,8 @@ jobs:
         run: ./scripts/sync-version.sh
       - name: Fail on drift
         run: |
-          if ! git diff --exit-code gemini-extension.json SECURITY.md; then
-            echo "::error::gemini-extension.json / SECURITY.md are out of date — run ./scripts/sync-version.sh and commit."
+          if ! git diff --exit-code SECURITY.md; then
+            echo "::error::SECURITY.md is out of date — run ./scripts/sync-version.sh and commit."
             exit 1
           fi
 

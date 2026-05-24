@@ -433,15 +433,6 @@ task mentions Slack. Manual fallback (copy the whole tree):
 cp -R ./skills/slk ./skills/slk-* ~/.claude/skills/
 ```
 
-### Gemini CLI
-
-```bash
-gemini extensions install https://github.com/howar31/slk
-```
-
-Requires `slk` on your `$PATH` (install via Homebrew or npm first). The extension
-loads the `slk` index skill; browse group-level detail with `slk <group> --help`.
-
 ### OpenClaw
 
 OpenClaw reads the skills' frontmatter. Symlink the tree to stay in sync with the repo:
