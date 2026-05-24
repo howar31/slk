@@ -372,11 +372,19 @@ func newAuthStatusCommand(g *GlobalFlags) *cobra.Command {
 				for _, name := range names {
 					ordered = append(ordered, statuses[name])
 				}
+				encBackend, encStatus := auth.EncryptionInfo(cfg)
 				payload := struct {
-					Encryption string          `json:"encryption"`
-					Active     string          `json:"active"`
-					Profiles   []profileStatus `json:"profiles"`
-				}{auth.EncryptionStatus(cfg), cfg.Active, ordered}
+					Encryption struct {
+						Backend string `json:"backend"`
+						Status  string `json:"status"`
+					} `json:"encryption"`
+					Active   string          `json:"active"`
+					Profiles []profileStatus `json:"profiles"`
+				}{}
+				payload.Encryption.Backend = encBackend
+				payload.Encryption.Status = encStatus
+				payload.Active = cfg.Active
+				payload.Profiles = ordered
 				enc := json.NewEncoder(out)
 				enc.SetIndent("", "  ")
 				return enc.Encode(payload)

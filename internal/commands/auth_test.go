@@ -597,6 +597,10 @@ func TestAuthStatus_JSONOffline(t *testing.T) {
 		t.Fatalf("execute: %v", err)
 	}
 	var got struct {
+		Encryption struct {
+			Backend string `json:"backend"`
+			Status  string `json:"status"`
+		} `json:"encryption"`
 		Active   string `json:"active"`
 		Profiles []struct {
 			Name    string `json:"name"`
@@ -609,6 +613,9 @@ func TestAuthStatus_JSONOffline(t *testing.T) {
 	}
 	if got.Active != "work" || len(got.Profiles) != 1 || got.Profiles[0].Scope != "bot" || got.Profiles[0].Checked {
 		t.Fatalf("unexpected json: %+v", got)
+	}
+	if got.Encryption.Backend != "file" || got.Encryption.Status != "ok" {
+		t.Fatalf("unexpected encryption object: %+v", got.Encryption)
 	}
 }
 
