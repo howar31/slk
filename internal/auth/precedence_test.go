@@ -6,23 +6,22 @@ import (
 	"testing"
 )
 
-// TestResolveToken_PrecedenceMatrix locks down the four-axis precedence model
-// described in design spec §6:
+// TestResolveToken_PrecedenceAndAssertion locks down the precedence model and
+// the scope-assertion semantics described in design spec §6:
 //  1. envToken (from SLK_TOKEN) always wins
 //  2. else: explicit profileName flag overrides cfg.Active
 //  3. else: cfg.Active is used
-//  4. identity (user|bot) selects the right token within a profile
-func TestResolveToken_PrecedenceMatrix(t *testing.T) {
+//  4. assertScope, when non-empty, must match the token's derived scope
+func TestResolveToken_PrecedenceAndAssertion(t *testing.T) {
 	t.Setenv(keyEnvVar, backendFile)
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.toml")
 
-	// Write a real config with two profiles, each having both tokens.
 	cfg := &Config{
 		Active: "work",
 		Profiles: map[string]Profile{
-			"work":     {UserToken: "xoxp-work-user", BotToken: "xoxb-work-bot"},
-			"personal": {UserToken: "xoxp-personal-user", BotToken: "xoxb-personal-bot"},
+			"work":     {Token: "xoxb-work-bot"},
+			"personal": {Token: "xoxp-personal-user"},
 		},
 	}
 	if err := Save(cfgPath, cfg); err != nil {
@@ -36,21 +35,22 @@ func TestResolveToken_PrecedenceMatrix(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		profileName string
-		identity    string
+		assertScope string
 		envToken    string
 		wantToken   string
 		wantErr     bool
 	}{
-		{"active profile, default identity", "", "user", "", "xoxp-work-user", false},
-		{"active profile, bot identity", "", "bot", "", "xoxb-work-bot", false},
-		{"explicit profile flag overrides active", "personal", "user", "", "xoxp-personal-user", false},
-		{"personal + bot", "personal", "bot", "", "xoxb-personal-bot", false},
-		{"env token wins over everything", "personal", "user", "xoxp-env-override", "xoxp-env-override", false},
-		{"env token wins even with bot identity", "personal", "bot", "xoxp-env-override", "xoxp-env-override", false},
-		{"missing profile is an error", "ghost", "user", "", "", true},
+		{"active profile, no assertion", "", "", "", "xoxb-work-bot", false},
+		{"active profile, matching assertion", "", "bot", "", "xoxb-work-bot", false},
+		{"active profile, mismatched assertion", "", "user", "", "", true},
+		{"explicit profile overrides active", "personal", "", "", "xoxp-personal-user", false},
+		{"explicit profile, matching assertion", "personal", "user", "", "xoxp-personal-user", false},
+		{"env token wins over everything", "personal", "", "xoxp-env", "xoxp-env", false},
+		{"env token still asserted", "personal", "bot", "xoxp-env", "", true},
+		{"missing profile is an error", "ghost", "", "", "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := ResolveToken(loaded, tc.profileName, tc.identity, tc.envToken)
+			got, err := ResolveToken(loaded, tc.profileName, tc.assertScope, tc.envToken)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("err = %v, wantErr = %v", err, tc.wantErr)
 			}
@@ -60,14 +60,14 @@ func TestResolveToken_PrecedenceMatrix(t *testing.T) {
 		})
 	}
 
-	// Bonus: AuthError type is preserved for the missing-profile case so
-	// callers get exit code 3 instead of 1.
-	_, err = ResolveToken(loaded, "ghost", "user", "")
+	// AuthError type is preserved for the assertion-mismatch case so callers
+	// get exit code 3 instead of 1.
+	_, err = ResolveToken(loaded, "", "user", "")
 	if _, ok := err.(*AuthError); !ok {
-		t.Errorf("expected *AuthError for missing profile, got %T", err)
+		t.Errorf("expected *AuthError for assertion mismatch, got %T", err)
 	}
 
-	// Bonus: SLK_CONFIG env override path resolves.
+	// SLK_CONFIG env override path resolves.
 	t.Setenv("SLK_CONFIG", cfgPath)
 	got, err := ConfigPath()
 	if err != nil {
@@ -85,10 +85,10 @@ func TestResolveToken_UndecryptableTokenErrors(t *testing.T) {
 	cfg := &Config{
 		Active: "work",
 		Profiles: map[string]Profile{
-			"work": {UserToken: encPrefix + "bm90LXJlYWwtY2lwaGVydGV4dA=="},
+			"work": {Token: encPrefix + "bm90LXJlYWwtY2lwaGVydGV4dA=="},
 		},
 	}
-	_, err := ResolveToken(cfg, "", "user", "")
+	_, err := ResolveToken(cfg, "", "", "")
 	if err == nil {
 		t.Fatal("expected an error for an undecryptable token")
 	}
@@ -97,7 +97,7 @@ func TestResolveToken_UndecryptableTokenErrors(t *testing.T) {
 	}
 
 	// SLK_TOKEN must still bypass everything, even with a broken stored token.
-	tok, err := ResolveToken(cfg, "", "user", "xoxp-env")
+	tok, err := ResolveToken(cfg, "", "", "xoxp-env")
 	if err != nil {
 		t.Fatalf("env override should bypass the broken token: %v", err)
 	}

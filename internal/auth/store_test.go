@@ -15,7 +15,7 @@ func TestStore_SaveLoadRoundTrip(t *testing.T) {
 	cfg := &Config{
 		Active: "work",
 		Profiles: map[string]Profile{
-			"work": {UserToken: "xoxp-1", BotToken: "xoxb-1"},
+			"work": {Token: "xoxb-1"},
 		},
 	}
 	if err := Save(path, cfg); err != nil {
@@ -29,12 +29,12 @@ func TestStore_SaveLoadRoundTrip(t *testing.T) {
 		t.Fatalf("config perms = %o, want 600", info.Mode().Perm())
 	}
 
-	// On-disk tokens must be ciphertext, not the raw values.
+	// On-disk token must be ciphertext, not the raw value.
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read raw: %v", err)
 	}
-	if strings.Contains(string(raw), "xoxp-1") || strings.Contains(string(raw), "xoxb-1") {
+	if strings.Contains(string(raw), "xoxb-1") {
 		t.Fatalf("config file leaked a plaintext token:\n%s", raw)
 	}
 
@@ -51,11 +51,8 @@ func TestStore_SaveLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if loaded.Active != "work" || loaded.Profiles["work"].UserToken != "xoxp-1" {
+	if loaded.Active != "work" || loaded.Profiles["work"].Token != "xoxb-1" {
 		t.Fatalf("round trip mismatch: %+v", loaded)
-	}
-	if loaded.Profiles["work"].BotToken != "xoxb-1" {
-		t.Fatalf("bot token round trip mismatch: %+v", loaded)
 	}
 }
 
@@ -78,9 +75,7 @@ func TestStore_PlaintextReadableEncryptedOnNextSave(t *testing.T) {
 	legacy := `active = "work"
 
 [profiles.work]
-workspace = "acme"
-user_token = "xoxp-legacy"
-bot_token = "xoxb-legacy"
+token = "xoxp-legacy"
 `
 	if err := os.WriteFile(path, []byte(legacy), 0o600); err != nil {
 		t.Fatalf("seed plaintext: %v", err)
@@ -91,7 +86,7 @@ bot_token = "xoxb-legacy"
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if loaded.Profiles["work"].UserToken != "xoxp-legacy" {
+	if loaded.Profiles["work"].Token != "xoxp-legacy" {
 		t.Fatalf("plaintext token not readable: %+v", loaded)
 	}
 	raw, err := os.ReadFile(path)
@@ -99,7 +94,7 @@ bot_token = "xoxb-legacy"
 		t.Fatalf("read raw after load: %v", err)
 	}
 	if !strings.Contains(string(raw), "xoxp-legacy") {
-		t.Fatalf("Load must not rewrite the file (B: no eager migration):\n%s", raw)
+		t.Fatalf("Load must not rewrite the file (no eager migration):\n%s", raw)
 	}
 
 	// The next Save (e.g. any auth write command) encrypts the plaintext.
@@ -110,24 +105,44 @@ bot_token = "xoxb-legacy"
 	if err != nil {
 		t.Fatalf("read raw after save: %v", err)
 	}
-	if strings.Contains(string(raw), "xoxp-legacy") || strings.Contains(string(raw), "xoxb-legacy") {
-		t.Fatalf("Save did not encrypt the plaintext fields:\n%s", raw)
+	if strings.Contains(string(raw), "xoxp-legacy") {
+		t.Fatalf("Save did not encrypt the plaintext token:\n%s", raw)
 	}
 	if !strings.Contains(string(raw), `key_backend = "file"`) {
 		t.Fatalf("Save did not record key_backend:\n%s", raw)
 	}
-	// The legacy `workspace` key is no longer part of the schema: Load ignores it
-	// and Save must not write it back.
-	if strings.Contains(string(raw), "workspace") {
-		t.Fatalf("Save must drop the obsolete workspace key:\n%s", raw)
-	}
 
-	// The encrypted form still resolves to the original values.
+	// The encrypted form still resolves to the original value.
 	again, err := Load(path)
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if again.Profiles["work"].UserToken != "xoxp-legacy" {
+	if again.Profiles["work"].Token != "xoxp-legacy" {
 		t.Fatalf("post-encrypt decrypt mismatch: %+v", again)
+	}
+}
+
+func TestSaveLoad_SingleTokenRoundTrip(t *testing.T) {
+	t.Setenv(keyEnvVar, backendFile)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+
+	cfg := &Config{
+		Active:   "work",
+		Profiles: map[string]Profile{"work": {Token: "xoxb-work-bot"}},
+	}
+	if err := Save(path, cfg); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	raw, _ := os.ReadFile(path)
+	if strings.Contains(string(raw), "xoxb-work-bot") {
+		t.Fatal("token stored in plaintext")
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := loaded.Profiles["work"].Token; got != "xoxb-work-bot" {
+		t.Fatalf("Token = %q, want xoxb-work-bot", got)
 	}
 }

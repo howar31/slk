@@ -10,13 +10,12 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Profile holds credentials for one Slack workspace. The token fields are stored
-// encrypted at rest (see crypto.go); they are plaintext in memory after Load and
-// re-encrypted by Save. slk does not persist the OAuth client id/secret — they are
-// used only transiently during `auth login`.
+// Profile holds the credential for one Slack identity. The token is stored
+// encrypted at rest (see crypto.go); it is plaintext in memory after Load and
+// re-encrypted by Save. Scope (user/bot) is derived from the prefix (TokenScope),
+// never stored. slk does not persist the OAuth client id/secret.
 type Profile struct {
-	UserToken string `toml:"user_token,omitempty"`
-	BotToken  string `toml:"bot_token,omitempty"`
+	Token string `toml:"token,omitempty"`
 }
 
 // Config is the on-disk slk configuration. KeyBackend records which backend
@@ -86,20 +85,14 @@ func decryptInPlace(cfg *Config, path string) {
 	}
 
 	for name, p := range cfg.Profiles {
-		changed := false
-		for _, f := range []*string{&p.UserToken, &p.BotToken} {
-			if *f == "" || !isEncrypted(*f) {
-				continue
-			}
-			if !ensureKey() {
-				continue
-			}
-			if pt, err := decryptValue(key, *f); err == nil {
-				*f = pt
-				changed = true
-			}
+		if p.Token == "" || !isEncrypted(p.Token) {
+			continue
 		}
-		if changed {
+		if !ensureKey() {
+			continue
+		}
+		if pt, err := decryptValue(key, p.Token); err == nil {
+			p.Token = pt
 			cfg.Profiles[name] = p
 		}
 	}
@@ -127,19 +120,17 @@ func Save(path string, cfg *Config) error {
 	return writeConfig(path, &out)
 }
 
-// encryptProfile returns a copy of p with each non-empty, not-already-encrypted
-// sensitive field encrypted.
+// encryptProfile returns a copy of p with its token encrypted when it is
+// non-empty and not already encrypted.
 func encryptProfile(key []byte, p Profile) (Profile, error) {
-	for _, f := range []*string{&p.UserToken, &p.BotToken} {
-		if *f == "" || isEncrypted(*f) {
-			continue
-		}
-		v, err := encryptValue(key, *f)
-		if err != nil {
-			return p, err
-		}
-		*f = v
+	if p.Token == "" || isEncrypted(p.Token) {
+		return p, nil
 	}
+	v, err := encryptValue(key, p.Token)
+	if err != nil {
+		return p, err
+	}
+	p.Token = v
 	return p, nil
 }
 

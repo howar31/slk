@@ -10,7 +10,7 @@ func EncryptionStatus(cfg *Config) string {
 		return "encryption: none (legacy plaintext)"
 	}
 	for _, p := range cfg.Profiles {
-		if isEncrypted(p.UserToken) || isEncrypted(p.BotToken) {
+		if isEncrypted(p.Token) {
 			return fmt.Sprintf("encryption: %s (error: key unavailable)", cfg.KeyBackend)
 		}
 	}
