@@ -189,6 +189,12 @@ needs every scope; trim the list to the subset you actually run.
   "display_information": {
     "name": "slk"
   },
+  "features": {
+    "bot_user": {
+      "always_online": false,
+      "display_name": "slk"
+    }
+  },
   "oauth_config": {
     "scopes": {
       "user": [
@@ -411,43 +417,31 @@ index lists the groups and links to one `slk-<group>` skill each, alongside a sh
 `slk-shared` reference — so an agent loads only the surface it needs instead of one
 large file. Because they are generated and drift-guarded in CI, your agent always
 sees accurate, in-sync docs instead of hand-written files that lag the code. Install
-them with one command, or wire them up per agent below.
+them with `npx skills`, or wire them in manually below.
 
-### Claude Code, Cursor, and other skill-aware agents
+### Claude Code, Gemini CLI, Codex, Cursor, and other skill-aware agents
 
 ```bash
-npx skills add https://github.com/howar31/slk
+npx skills add https://github.com/howar31/slk   # then follow the wizard
+npx skills update                               # update later
 ```
 
-This installs slk's skills into your agent's skills directory (e.g.
-`~/.claude/skills/`). Claude Code activates the matching skill automatically when a
-task mentions Slack. Manual fallback (copy the whole tree):
+Follow the [`npx skills`](https://github.com/vercel-labs/skills) wizard to choose your agents
+and skills — pick all the `slk` skills, since the index links to one skill per command group.
+
+Manual fallback (no `npx`, or an agent it doesn't support) — copy the tree into the
+agent's skills directory yourself:
 
 ```bash
 cp -R ./skills/slk ./skills/slk-* ~/.claude/skills/
 ```
 
-### Gemini CLI
+### Others
 
-```bash
-gemini extensions install https://github.com/howar31/slk
-```
-
-Requires `slk` on your `$PATH` (install via Homebrew or npm first). The extension
-loads the `slk` index skill; browse group-level detail with `slk <group> --help`.
-
-### OpenClaw
-
-OpenClaw reads the skills' frontmatter. Symlink the tree to stay in sync with the repo:
-`ln -s $(pwd)/skills/slk* ~/.openclaw/skills/`. If the `slk` binary is missing, OpenClaw
-auto-installs it from one of the `install:` specs in the `slk` index skill's metadata
-(npm `@howar31/slk`, the Homebrew tap, or `go install`).
-
-### Cursor / aider / others
-
-Either reference `slk --help` from your agent's instruction file, or paste the contents of
-the index skill [`skills/slk/SKILL.md`](skills/slk/SKILL.md) (which links to the per-group
-skills) into the agent's persistent rules file (e.g., `.cursorrules`, `GEMINI.md`).
+For agents without a skills directory, either reference `slk --help` from the agent's
+instruction file, or paste the contents of the index skill
+[`skills/slk/SKILL.md`](skills/slk/SKILL.md) (which links to the per-group skills) into the
+agent's persistent rules file (e.g., `.cursorrules`, `GEMINI.md`).
 
 ## Usage
 
