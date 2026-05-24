@@ -88,8 +88,8 @@ confirmations and ID-resolved reads — the regime `slk` is designed to shine in
 - Go 1.25+ (only required if you install from source).
 - A Slack workspace where you can create your own Slack app. `slk` uses your own OAuth
   credentials; it never embeds a client secret in the binary.
-- A Slack user OAuth token (`xoxp-…`) with the scopes for the commands you plan to use. See
-  [Authentication](#authentication).
+- A Slack user OAuth token (`xoxp-…`) or bot token (`xoxb-…`) with the scopes for the commands
+  you plan to use. See [Authentication](#authentication).
 
 ## Installation
 
@@ -149,7 +149,7 @@ go build -o slk ./cmd/slk   # version is read from the committed VERSION file
 slk --version
 
 # Store your token (see Authentication for how to obtain one)
-slk auth set-token --profile work --user xoxp-...
+slk auth set-token --profile work --token xoxp-...
 
 # Read the last 5 messages of a channel
 slk msg read --channel C0123456789 --limit 5
@@ -280,17 +280,18 @@ needs every scope; trim the list to the subset you actually run.
 
 ### 2. Optional — Add or edit OAuth scopes (skip if you created from the manifest)
 
-Under **OAuth & Permissions** → **User Token Scopes**, add scopes one at a time, choosing the
-ones you need from the `user:` list above.
+Under **OAuth & Permissions** → **User Token Scopes** (for `xoxp-`) or **Bot Token Scopes**
+(for `xoxb-`), add scopes one at a time, choosing the ones you need from the `user:` or `bot:`
+list above.
 
 To change scopes on an app you already created, open **Features → App Manifest** in the app's
-settings, edit the `user:` list there, and **Save Changes** — Slack applies the diff and
-prompts you to reinstall if you added new scopes.
+settings, edit the `user:` or `bot:` list there, and **Save Changes** — Slack applies the diff
+and prompts you to reinstall if you added new scopes.
 
 ### 3. Get a token into `slk`
 
-Two ways — pick one. Both store the same kind of per-user `xoxp-` token; the OAuth flow is also
-how a team shares one app (see [Team setup](#team-setup)).
+Two ways — pick one. Each stores a single token (`xoxp-` or `xoxb-`) into a profile; the OAuth
+flow is also how a team shares one app (see [Team setup](#team-setup)).
 
 - **Method A — paste a token** (simplest): install the app, copy its token, paste it in. No
   client secret, no redirect URL.
@@ -310,19 +311,18 @@ token as you paste it, so nothing lands in your shell history:
 slk auth set-token
 ```
 
-It prompts for three things:
+It prompts for two things:
 
 - **`Profile name [default]:`** — a label for this set of credentials, so you can keep more
   than one (e.g. `work`, `personal`) and switch between them with `slk auth switch <name>`.
   Press Enter to accept `default`.
-- **`Paste user token (xoxp-, hidden):`** — the **User OAuth Token** you just copied.
+- **`Paste token (xoxp- or xoxb-, hidden):`** — the token you just copied. A profile holds
+  exactly one token; its scope (user/bot) is derived from the `xoxp-`/`xoxb-` prefix.
   Input is hidden; paste it and press Enter.
-- **`Paste bot token (xoxb-, optional, hidden):`** — only if you also use a bot token
-  (`xoxb-`); most users press Enter to skip.
 
-Scripting it instead? Pass values as flags (`slk auth set-token --help`), and use `--user -`
+Scripting it instead? Pass values as flags (`slk auth set-token --help`), and use `--token -`
 to read the token from stdin so it stays out of history:
-`printf '%s' "$TOKEN" | slk auth set-token --profile work --user -`.
+`printf '%s' "$TOKEN" | slk auth set-token --profile work --token -`.
 
 #### Method B — OAuth flow (`slk auth login`)
 
@@ -337,8 +337,9 @@ slk auth login --client-id <id> --client-secret <secret>
 ```
 
 `slk` prints an authorize URL and starts a local listener; open the URL, approve, and `slk`
-exchanges the code for your own `xoxp-` token and stores it. The client secret is used only for
-that exchange and is **never** persisted. Run with no arguments in a terminal to be prompted for
+exchanges the code for a token and stores it. By default it mints a user token (`xoxp-`); pass
+`--as bot` to mint a bot token (`xoxb-`) instead. The client secret is used only for that
+exchange and is **never** persisted. Run with no arguments in a terminal to be prompted for
 each field instead (the client secret is entered hidden).
 
 Either way, the token lands in `~/.config/slk/config.toml` (mode `0600`) and is encrypted at
@@ -351,11 +352,14 @@ slk auth status   # lists profiles + verifies the active one live against Slack
 slk auth test     # explicit live check of the active token
 ```
 
-`slk auth status` lists each profile as `<name> (user=true bot=false)` plus the encryption
-backend, and verifies the **active** profile live against Slack — appending its identity
-(`<team> (<team_id>) — <user> (<user_id>) @ <url>`) on success, `(invalid token: …)` if Slack
-rejects it, or `(offline: …)` if Slack is unreachable. Pass `--all` to verify every profile, or
-`--offline` to skip the network and list local info only. It never prints the token itself.
+`slk auth status` lists each profile as `<marker> <name> [<scope>]` (e.g. `* work [bot]`)
+where scope is `user`, `bot`, `none`, `encrypted`, or `unknown` — derived from the token prefix,
+not stored. It also shows the encryption backend, and verifies the **active** profile live
+against Slack — appending its identity (`<team> (<team_id>) — <user> (<user_id>) @ <url>`) on
+success, `(invalid token: …)` if Slack rejects it, or `(offline: …)` if Slack is unreachable.
+Pass `--all` to verify every profile, `--offline` to skip the network and list local info only,
+or `--format json` for a structured object (includes `encryption`, `active`, and `profiles[]`
+fields). It never prints the token itself.
 
 `slk auth test` is the explicit single-token check: it calls Slack's `auth.test` and prints the
 same identity line. A bad token returns an auth error (`invalid_auth` / `not_authed`) and exits
@@ -363,10 +367,10 @@ same identity line. A bad token returns an auth error (`invalid_auth` / `not_aut
 
 ### Credential storage
 
-The `user_token` and `bot_token` fields are encrypted at rest with AES-256-GCM. Tokens you
-add with `slk auth set-token` or `slk auth login` are encrypted on write; an existing
-plaintext value (for example one you hand-edited into the file) keeps working and is encrypted
-the next time `slk` writes the config — no re-authentication is ever required. `slk` does
+The single `token` field per profile is encrypted at rest with AES-256-GCM. Tokens you add
+with `slk auth set-token` or `slk auth login` are encrypted on write; an existing plaintext
+value (for example one you hand-edited into the file) keeps working and is encrypted the next
+time `slk` writes the config — no re-authentication is ever required. `slk` does
 **not** persist the OAuth `client_id` / `client_secret`: `auth login` uses them only
 transiently for the token exchange, never writing them to the config.
 
@@ -457,9 +461,12 @@ slk <group> --help         # a group's verbs   (e.g. slk msg --help)
 slk <group> <verb> --help  # a verb's flags     (e.g. slk msg send --help)
 ```
 
-Global flags such as `--format`, `--raw`, and `--dry-run` apply to every command;
-`slk --help` lists them all. Agents get the same surface as a generated skill
-([`skills/slk/SKILL.md`](skills/slk/SKILL.md)) — see [Agent setup](#agent-setup).
+Global flags such as `--format`, `--raw`, `--dry-run`, and `--as` apply to every command;
+`slk --help` lists them all. `--as user|bot` has two behaviors: on any regular command it
+asserts the active token's scope and exits `3` on a known mismatch; on `auth login` it selects
+which token type to mint (default `user`; see [Bot mode](#bot-mode)). Agents get the same
+surface as a generated skill ([`skills/slk/SKILL.md`](skills/slk/SKILL.md)) — see
+[Agent setup](#agent-setup).
 
 The rest of this section documents only what `--help` can't convey on its own —
 usage traps, conceptual data shapes, and behavior notes:
@@ -612,8 +619,14 @@ slk auth login --as bot --client-id <id> --client-secret <secret>
 slk auth set-token --token xoxb-...
 ```
 
-Both paths store the token in the same profile alongside your user token (if any).
-`slk auth status` will show `bot=true` once it is in place.
+A profile holds exactly one token. If you want both a user identity and a bot identity, use
+**two profiles** — for example `--profile work` for your `xoxp-` token and `--profile work-bot`
+for the `xoxb-`. Switch between them with `--profile <name>` or the `SLK_PROFILE` environment
+variable. `slk auth status` will show `[bot]` next to the profile once it is in place.
+
+To assert that a command runs under a bot token (and fail fast with exit `3` if a user token
+is active instead), pass `--as bot`; conversely `--as user` asserts a user token. With no
+`--as`, `slk` uses whatever token is in the active profile without checking its scope.
 
 ## Known Slack-side limitations
 
