@@ -103,8 +103,8 @@ func newPinRemoveCommand(g *GlobalFlags) *cobra.Command {
 func newPinListCommand(g *GlobalFlags) *cobra.Command {
 	var channel string
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List pinned items in a channel",
+		Use:   "list",
+		Short: "List pinned items in a channel",
 		Annotations: map[string]string{
 			"slackMethod": "pins.list",
 			"userScopes":  "pins:read",

@@ -16,7 +16,6 @@ import (
 	"github.com/howar31/slk/internal/auth"
 )
 
-
 func TestFormatAuthIdentity(t *testing.T) {
 	raw := []byte(`{"ok":true,"url":"https://acme.slack.com/","team":"acme","user":"alice","team_id":"T0123456789","user_id":"U0123456789"}`)
 	line, err := formatAuthIdentity(raw)

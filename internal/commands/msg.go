@@ -89,8 +89,8 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 	var channel, oldest, latest, cursor string
 	var limit int
 	cmd := &cobra.Command{
-		Use:         "read",
-		Short:       "Read messages from a channel or DM",
+		Use:   "read",
+		Short: "Read messages from a channel or DM",
 		Annotations: map[string]string{
 			"slackMethod": "conversations.history",
 			"userScopes":  "channels:history,groups:history,im:history,mpim:history",
@@ -206,51 +206,6 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&threadTS, "thread", "", "reply in this thread ts")
 	cmd.Flags().BoolVar(&replyBroadcast, "reply-broadcast", false, "also broadcast a threaded reply to the channel (requires --thread)")
 	cmd.MarkFlagRequired("channel")
-	return cmd
-}
-
-// newMsgWriteCommand builds a simple write command mapping required flags to
-// Slack form params of the same name.
-func newMsgWriteCommand(g *GlobalFlags, use, method string, flags []string) *cobra.Command {
-	values := map[string]*string{}
-	cmd := &cobra.Command{
-		Use:   use,
-		Short: use + " a message",
-		Annotations: map[string]string{
-			"slackMethod": method,
-			"write":       "true",
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			params := map[string]string{}
-			for _, f := range flags {
-				params[f] = *values[f]
-			}
-			if g.DryRun {
-				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] %s %v\n", method, params)
-				return nil
-			}
-			client, err := buildClient(cmd, g)
-			if err != nil {
-				return err
-			}
-			raw, err := client.Call(method, params, nil)
-			if err != nil {
-				return err
-			}
-			if g.Raw {
-				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
-				return nil
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), use+" ok")
-			return nil
-		},
-	}
-	for _, f := range flags {
-		v := new(string)
-		values[f] = v
-		cmd.Flags().StringVar(v, f, "", f+" value")
-		cmd.MarkFlagRequired(f)
-	}
 	return cmd
 }
 
@@ -615,8 +570,8 @@ func parseMsgScheduled(raw []byte) ([]searchHit, error) {
 func newMsgScheduledCommand(g *GlobalFlags) *cobra.Command {
 	var channel string
 	cmd := &cobra.Command{
-		Use:         "scheduled",
-		Short:       "List scheduled messages",
+		Use:   "scheduled",
+		Short: "List scheduled messages",
 		Annotations: map[string]string{
 			"slackMethod": "chat.scheduledMessages.list",
 			"userScopes":  "",
@@ -654,8 +609,8 @@ func newMsgScheduledCommand(g *GlobalFlags) *cobra.Command {
 func newMsgPermalinkCommand(g *GlobalFlags) *cobra.Command {
 	var channel, ts string
 	cmd := &cobra.Command{
-		Use:         "permalink",
-		Short:       "Get the permalink for a message",
+		Use:   "permalink",
+		Short: "Get the permalink for a message",
 		Annotations: map[string]string{
 			"slackMethod": "chat.getPermalink",
 			"userScopes":  "",
@@ -808,8 +763,8 @@ func parseMsgReactions(raw []byte) ([]searchHit, error) {
 func newMsgReactionsCommand(g *GlobalFlags) *cobra.Command {
 	var channel, ts string
 	cmd := &cobra.Command{
-		Use:         "reactions",
-		Short:       "List reactions on a message",
+		Use:   "reactions",
+		Short: "List reactions on a message",
 		Annotations: map[string]string{
 			"slackMethod": "reactions.get",
 			"userScopes":  "reactions:read",
@@ -882,8 +837,8 @@ func parseMsgReacted(raw []byte) ([]searchHit, error) {
 func newMsgReactedCommand(g *GlobalFlags) *cobra.Command {
 	var user string
 	cmd := &cobra.Command{
-		Use:         "reacted",
-		Short:       "List items the user has reacted to",
+		Use:   "reacted",
+		Short: "List items the user has reacted to",
 		Annotations: map[string]string{
 			"slackMethod": "reactions.list",
 			"userScopes":  "reactions:read",

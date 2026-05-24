@@ -39,8 +39,8 @@ func newSearchMessagesCommand(g *GlobalFlags) *cobra.Command {
 	var query string
 	var public bool
 	cmd := &cobra.Command{
-		Use:         "messages",
-		Short:       "Search messages (requires a user token)",
+		Use:   "messages",
+		Short: "Search messages (requires a user token)",
 		Annotations: map[string]string{
 			"slackMethod": "search.messages",
 			"userScopes":  "search:read",
@@ -94,8 +94,8 @@ func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
 	var includeArchived bool
 	var channelTypes string
 	cmd := &cobra.Command{
-		Use:         "channels",
-		Short:       "List/search channels (client-side filter)",
+		Use:   "channels",
+		Short: "List/search channels (client-side filter)",
 		Annotations: map[string]string{
 			"slackMethod": "conversations.list",
 			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
@@ -161,8 +161,8 @@ func newSearchChannelsCommand(g *GlobalFlags) *cobra.Command {
 func newSearchUsersCommand(g *GlobalFlags) *cobra.Command {
 	var query string
 	cmd := &cobra.Command{
-		Use:         "users",
-		Short:       "List/search workspace users (client-side filter)",
+		Use:   "users",
+		Short: "List/search workspace users (client-side filter)",
 		Annotations: map[string]string{
 			"slackMethod": "users.list",
 			"userScopes":  "users:read",
@@ -200,8 +200,8 @@ func newSearchUsersCommand(g *GlobalFlags) *cobra.Command {
 func newSearchFilesCommand(g *GlobalFlags) *cobra.Command {
 	var query string
 	cmd := &cobra.Command{
-		Use:         "files",
-		Short:       "Search files (requires a user token)",
+		Use:   "files",
+		Short: "Search files (requires a user token)",
 		Annotations: map[string]string{
 			"slackMethod": "search.files",
 			"userScopes":  "search:read",
@@ -258,8 +258,8 @@ func parseSearchFiles(raw []byte) ([]searchHit, error) {
 func newSearchAllCommand(g *GlobalFlags) *cobra.Command {
 	var query string
 	cmd := &cobra.Command{
-		Use:         "all",
-		Short:       "Search messages and files combined (requires a user token)",
+		Use:   "all",
+		Short: "Search messages and files combined (requires a user token)",
 		Annotations: map[string]string{
 			"slackMethod": "search.all",
 			"userScopes":  "search:read",

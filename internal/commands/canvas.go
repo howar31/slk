@@ -99,8 +99,8 @@ func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 	var canvasID string
 	var withSections bool
 	cmd := &cobra.Command{
-		Use:         "read",
-		Short:       "Read a canvas as markdown (HTML-converted)",
+		Use:   "read",
+		Short: "Read a canvas as markdown (HTML-converted)",
 		Annotations: map[string]string{
 			"slackMethod": "files.info",
 			"userScopes":  "files:read,canvases:read",
@@ -412,8 +412,8 @@ func newCanvasListCommand(g *GlobalFlags) *cobra.Command {
 	var userQuery string
 	var limit int
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List canvases via search.files",
+		Use:   "list",
+		Short: "List canvases via search.files",
 		Annotations: map[string]string{
 			"slackMethod": "search.files",
 			"userScopes":  "search:read",

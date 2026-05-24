@@ -36,8 +36,8 @@ func newChannelListCommand(g *GlobalFlags) *cobra.Command {
 	var limit int
 	var cursor, types string
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List channels",
+		Use:   "list",
+		Short: "List channels",
 		Annotations: map[string]string{
 			"slackMethod": "conversations.list",
 			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
@@ -294,8 +294,8 @@ func parseChannelMembers(raw []byte) ([]searchHit, string, error) {
 func newChannelInfoCommand(g *GlobalFlags) *cobra.Command {
 	var channel string
 	cmd := &cobra.Command{
-		Use:         "info",
-		Short:       "Show channel details",
+		Use:   "info",
+		Short: "Show channel details",
 		Annotations: map[string]string{
 			"slackMethod": "conversations.info",
 			"userScopes":  "channels:read,groups:read,im:read,mpim:read",

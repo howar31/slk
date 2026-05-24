@@ -60,8 +60,8 @@ func parseUsergroupUsers(raw []byte) ([]searchHit, error) {
 
 func newUsergroupListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List user groups",
+		Use:   "list",
+		Short: "List user groups",
 		Annotations: map[string]string{
 			"slackMethod": "usergroups.list",
 			"userScopes":  "usergroups:read",
@@ -266,8 +266,8 @@ func newUsergroupDisableCommand(g *GlobalFlags) *cobra.Command {
 func newUsergroupUsersCommand(g *GlobalFlags) *cobra.Command {
 	var usergroup string
 	cmd := &cobra.Command{
-		Use:         "users",
-		Short:       "List members of a user group",
+		Use:   "users",
+		Short: "List members of a user group",
 		Annotations: map[string]string{
 			"slackMethod": "usergroups.users.list",
 			"userScopes":  "usergroups:read",

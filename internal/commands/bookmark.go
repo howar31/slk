@@ -168,8 +168,8 @@ func newBookmarkRemoveCommand(g *GlobalFlags) *cobra.Command {
 func newBookmarkListCommand(g *GlobalFlags) *cobra.Command {
 	var channel string
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List bookmarks in a channel",
+		Use:   "list",
+		Short: "List bookmarks in a channel",
 		Annotations: map[string]string{
 			"slackMethod": "bookmarks.list",
 			"userScopes":  "bookmarks:read",

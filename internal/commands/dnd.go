@@ -78,8 +78,8 @@ func parseDndTeam(raw []byte) ([]searchHit, error) {
 func newDndInfoCommand(g *GlobalFlags) *cobra.Command {
 	var userID string
 	cmd := &cobra.Command{
-		Use:         "info",
-		Short:       "Show DND status for a user (or the caller)",
+		Use:   "info",
+		Short: "Show DND status for a user (or the caller)",
 		Annotations: map[string]string{
 			"slackMethod": "dnd.info",
 			"userScopes":  "dnd:read",
@@ -117,8 +117,8 @@ func newDndInfoCommand(g *GlobalFlags) *cobra.Command {
 func newDndTeamCommand(g *GlobalFlags) *cobra.Command {
 	var users string
 	cmd := &cobra.Command{
-		Use:         "team",
-		Short:       "Show DND status for a comma-separated list of users",
+		Use:   "team",
+		Short: "Show DND status for a comma-separated list of users",
 		Annotations: map[string]string{
 			"slackMethod": "dnd.teamInfo",
 			"userScopes":  "dnd:read",

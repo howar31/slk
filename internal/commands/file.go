@@ -123,8 +123,8 @@ func parseFileInfo(raw []byte) (searchHit, error) {
 func newFileInfoCommand(g *GlobalFlags) *cobra.Command {
 	var fileID string
 	cmd := &cobra.Command{
-		Use:         "info",
-		Short:       "Show file details",
+		Use:   "info",
+		Short: "Show file details",
 		Annotations: map[string]string{
 			"slackMethod": "files.info",
 			"userScopes":  "files:read",

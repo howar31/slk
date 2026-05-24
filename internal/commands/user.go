@@ -59,8 +59,8 @@ func newUserListCommand(g *GlobalFlags) *cobra.Command {
 	var cursor string
 	var includeBots, includeDeactivated bool
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List workspace users",
+		Use:   "list",
+		Short: "List workspace users",
 		Annotations: map[string]string{
 			"slackMethod": "users.list",
 			"userScopes":  "users:read",
@@ -171,8 +171,8 @@ func fetchUsersWith(client *api.Client, opts userListOpts) ([]searchHit, error) 
 func newUserInfoCommand(g *GlobalFlags) *cobra.Command {
 	var userID string
 	cmd := &cobra.Command{
-		Use:         "info",
-		Short:       "Show one user's profile",
+		Use:   "info",
+		Short: "Show one user's profile",
 		Annotations: map[string]string{
 			"slackMethod": "users.info",
 			"userScopes":  "users:read",
@@ -230,8 +230,8 @@ func parseUserByEmail(raw []byte) (searchHit, error) {
 func newUserByEmailCommand(g *GlobalFlags) *cobra.Command {
 	var email string
 	cmd := &cobra.Command{
-		Use:         "by-email",
-		Short:       "Look up a user by email address",
+		Use:   "by-email",
+		Short: "Look up a user by email address",
 		Annotations: map[string]string{
 			"slackMethod": "users.lookupByEmail",
 			"userScopes":  "users:read.email",
@@ -276,8 +276,8 @@ func (p userPresence) Concise() string {
 func newUserPresenceCommand(g *GlobalFlags) *cobra.Command {
 	var userID string
 	cmd := &cobra.Command{
-		Use:         "presence",
-		Short:       "Get a user's presence status",
+		Use:   "presence",
+		Short: "Get a user's presence status",
 		Annotations: map[string]string{
 			"slackMethod": "users.getPresence",
 			"userScopes":  "users:read",
@@ -334,8 +334,8 @@ func parseUserChannels(raw []byte) ([]searchHit, error) {
 func newUserChannelsCommand(g *GlobalFlags) *cobra.Command {
 	var userID, types string
 	cmd := &cobra.Command{
-		Use:         "channels",
-		Short:       "List channels a user belongs to",
+		Use:   "channels",
+		Short: "List channels a user belongs to",
 		Annotations: map[string]string{
 			"slackMethod": "users.conversations",
 			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
@@ -542,8 +542,8 @@ func newUserProfileCommand(g *GlobalFlags) *cobra.Command {
 	var userID string
 	var includeLocale bool
 	cmd := &cobra.Command{
-		Use:         "profile",
-		Short:       "Show a user's profile fields",
+		Use:   "profile",
+		Short: "Show a user's profile fields",
 		Annotations: map[string]string{
 			"slackMethod": "users.profile.get",
 			"userScopes":  "users.profile:read",

@@ -37,8 +37,8 @@ func parseEmojiList(raw []byte) ([]searchHit, error) {
 
 func newEmojiListCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List custom emoji",
+		Use:   "list",
+		Short: "List custom emoji",
 		Annotations: map[string]string{
 			"slackMethod": "emoji.list",
 			"userScopes":  "emoji:read",

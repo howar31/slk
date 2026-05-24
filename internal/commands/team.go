@@ -37,8 +37,8 @@ func parseTeamInfo(raw []byte) (searchHit, error) {
 func newTeamInfoCommand(g *GlobalFlags) *cobra.Command {
 	var team string
 	cmd := &cobra.Command{
-		Use:         "info",
-		Short:       "Show workspace info",
+		Use:   "info",
+		Short: "Show workspace info",
 		Annotations: map[string]string{
 			"slackMethod": "team.info",
 			"userScopes":  "team:read",
@@ -97,8 +97,8 @@ func parseTeamProfile(raw []byte) ([]searchHit, error) {
 
 func newTeamProfileCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:         "profile",
-		Short:       "List workspace profile fields",
+		Use:   "profile",
+		Short: "List workspace profile fields",
 		Annotations: map[string]string{
 			"slackMethod": "team.profile.get",
 			"userScopes":  "users.profile:read",

@@ -18,8 +18,8 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 	var channel, thread, oldest, latest, cursor string
 	var limit int
 	cmd := &cobra.Command{
-		Use:         "read",
-		Short:       "Read replies in a thread",
+		Use:   "read",
+		Short: "Read replies in a thread",
 		Annotations: map[string]string{
 			"slackMethod": "conversations.replies",
 			"userScopes":  "channels:history,groups:history,im:history,mpim:history",

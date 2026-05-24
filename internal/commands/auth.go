@@ -33,8 +33,8 @@ func newAuthCommand(g *GlobalFlags) *cobra.Command {
 
 func newAuthTestCommand(g *GlobalFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:         "test",
-		Short:       "Verify the active token and show its live identity",
+		Use:   "test",
+		Short: "Verify the active token and show its live identity",
 		Annotations: map[string]string{
 			"slackMethod": "auth.test",
 			"userScopes":  "",

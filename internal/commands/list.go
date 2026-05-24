@@ -122,8 +122,8 @@ func parseListCreateID(raw []byte) string {
 func newListReadCommand(g *GlobalFlags) *cobra.Command {
 	var listID string
 	cmd := &cobra.Command{
-		Use:         "read",
-		Short:       "Read items in a List",
+		Use:   "read",
+		Short: "Read items in a List",
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.items.list",
 			"userScopes":  "lists:read",
