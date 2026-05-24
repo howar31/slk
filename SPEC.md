@@ -11,12 +11,12 @@ exposes `--raw` for callers that want full API responses.
 
 Primary consumer: a developer agent (e.g. Claude Code) running on
 macOS or Linux, authenticated against the operator's own Slack app via
-OAuth user tokens (`xoxp-…`). 1:1 parity with the 13 Slack MCP tools was
+OAuth user or bot tokens (`xoxp-`/`xoxb-`). 1:1 parity with the 13 Slack MCP tools was
 the original baseline; the curated surface has since grown to ~96 verbs
 across 15 command groups plus the `api` escape hatch, covering most
-user-token-reachable Slack Web API methods (everything the default OAuth
+user- or bot-token-reachable Slack Web API methods (everything the default OAuth
 scope set grants, excluding
-Enterprise-Grid `admin.*`, `xoxc`/`xoxd`-only, deprecated, and
+Enterprise-Grid `admin.*`, `xoxc`/`xoxd`-only browser tokens, deprecated, and
 app-framework methods).
 
 ## Architecture
@@ -26,10 +26,17 @@ app-framework methods).
 1. Cobra builds the command tree (`internal/commands.NewRootCommand`).
 2. The root command binds global flags via `internal/commands.GlobalFlags`
    (`--format`, `--profile`, `--raw`, `--dry-run`, `--no-resolve`,
-   `--as`).
-3. Each subcommand resolves a token through `internal/auth`
-   (env override → named profile → default profile) and builds an
-   `internal/api.Client` pointed at `https://slack.com/api`.
+   `--as`). `--as user|bot` (default "") serves two roles: on a normal
+   command it asserts the active token's derived scope (a known mismatch
+   returns `*auth.AuthError`, exit 3); on `auth login` it selects which
+   token to mint (default user).
+3. Each subcommand resolves a token through `internal/auth` via
+   `auth.ResolveToken(cfg, profileName, assertScope, envToken)`:
+   precedence env(`SLK_TOKEN`) → named profile → `cfg.Active`.
+   The `assertScope` argument is the `--as` value; when non-empty and the
+   resolved token's derived scope is known and differs, the call returns
+   `*auth.AuthError` (exit 3); an unknown prefix passes. The client is
+   then an `internal/api.Client` pointed at `https://slack.com/api`.
 4. The client serializes form-urlencoded params, performs the HTTP call,
    maps `ok=false` responses into `*api.APIError`, retries on 429
    (`Retry-After`) up to a small bound, and returns raw JSON. A separate
@@ -119,8 +126,9 @@ External dependencies are intentionally narrow:
 │   │   ├── store.go            # TOML config at ~/.config/slk/config.toml
 │   │   ├── crypto.go           # AES-256-GCM field encrypt/decrypt
 │   │   ├── keyprovider.go      # key file / OS-keyring backends
-│   │   ├── status.go           # EncryptionStatus line for `auth status`
-│   │   ├── token.go            # ResolveToken precedence
+│   │   ├── status.go           # EncryptionStatus / EncryptionInfo for `auth status`
+│   │   ├── token.go            # ResolveToken precedence + assertScope
+│   │   ├── scope.go            # TokenScope (prefix→"user"/"bot") + IsEncrypted wrapper
 │   │   ├── oauth.go            # local-callback OAuth flow
 │   │   └── errors.go           # AuthError → exit code 3
 │   ├── commands/               # Cobra command tree (one file per group)
@@ -156,7 +164,9 @@ External dependencies are intentionally narrow:
 │   │   ├── usergroup.go        # usergroups: list / create / update / enable /
 │   │   │                       # disable / users / set-users
 │   │   ├── version.go          # version + --check GitHub-release probe
-│   │   └── generateskill.go    # hidden `generate-skills`: writes the skills/ tree
+│   │   ├── scopes.go           # scopeUnion: builds sorted scope sets from annotations
+│   │   ├── generateskill.go    # hidden `generate-skills`: writes the skills/ tree
+│   │   └── generatemanifest.go # hidden `generate-manifest`: rewrites README manifest block
 │   ├── skillgen/               # skill-tree generator
 │   │   ├── skillgen.go         # GenerateAll(tree, version) → map[path]content
 │   │   └── templates/          # embedded index / shared / group templates
@@ -181,7 +191,7 @@ External dependencies are intentionally narrow:
 ├── docs/superpowers/           # design specs + implementation plans
 ├── .github/
 │   ├── workflows/
-│   │   ├── ci.yml              # PR + push-main: gofmt, vet, build, test, goreleaser check, skill drift
+│   │   ├── ci.yml              # PR + push-main: gofmt, vet, build, test, goreleaser check; skill/version-sync/manifest drift guards
 │   │   └── release.yml         # VERSION-driven release: gate → tag → goreleaser + npm + homebrew
 │   ├── dependabot.yml          # security-only updates (routine version bumps disabled)
 │   └── release.yml             # GitHub release-notes categorization by PR label
@@ -219,15 +229,19 @@ External dependencies are intentionally narrow:
   feeding `slk --version`); no `-ldflags` injection. The git release tag
   (`v<VERSION>`) and the published npm version derive automatically in CI
   at release time (`npm/package.json`'s committed `0.0.0` is a
-  placeholder). Three committed files carry a literal copy because they
-  are read at rest by external tools, fanned out via **two separate
-  concerns**: the `skills/` tree (each skill's `metadata.version`) is
-  produced by `slk generate-skills`, which rebuilds the whole tree from the
-  command tree and stamps the version into every file (CI `skill` job guards
-  drift);
-  `gemini-extension.json` (`version`) and `SECURITY.md` (supported-versions
-  table) are pure version copies rewritten by `scripts/sync-version.sh`
-  (CI `version-sync` job guards drift).
+  placeholder). Several committed files carry derived content, fanned out via
+  **three separate concerns**: (1) the `skills/` tree (each skill's
+  `metadata.version`) is produced by `slk generate-skills`, which rebuilds
+  the whole tree from the command tree and stamps the version (CI `skill`
+  job guards drift); (2) `gemini-extension.json` (`version`) and
+  `SECURITY.md` (supported-versions table) are pure version copies rewritten
+  by `scripts/sync-version.sh` (CI `version-sync` job guards drift);
+  (3) the README app-manifest scope block (between
+  `<!-- BEGIN/END GENERATED MANIFEST -->` markers) is regenerated by
+  `slk generate-manifest` from the command tree's scope annotations — this
+  is **scope/command-driven, not version-driven** and is NOT part of the
+  VERSION-bump fan-out (CI `manifest` job guards drift; run on scope or
+  command annotation changes).
 - **The skills are generated**: the `skills/` tree is produced by `slk
   generate-skills` from the Cobra tree — never hand-edit it. Per-command
   `Annotations["slackMethod"]` and `Annotations["write"]` drive the
@@ -248,9 +262,11 @@ External dependencies are intentionally narrow:
 - CI (`.github/workflows/ci.yml`): on every PR and push to `main` (code
   paths only — `**.md`, `docs/**`, `LICENSE`, `.gitignore` are ignored),
   GitHub Actions runs a gofmt check, `go vet`, `go build ./...`,
-  `go test ./...`, and `goreleaser check` on Go 1.25, plus a `skill` job
-  that regenerates the `skills/` tree and fails on any staged `git diff`
-  (the drift guard).
+  `go test ./...`, and `goreleaser check` on Go 1.25, plus three drift-guard
+  jobs: `skill` (regenerates `skills/` and fails on any staged diff),
+  `version-sync` (runs `sync-version.sh` and fails if `gemini-extension.json`
+  or `SECURITY.md` drift), and `manifest` (runs `generate-manifest` and fails
+  if `README.md`'s manifest block drifts).
 - Coverage snapshot: `go test ./... -coverpkg=./...
   -coverprofile=/tmp/slk.cov && go tool cover -func=/tmp/slk.cov`
 
@@ -286,7 +302,9 @@ outside the public tree).
 Releases are **VERSION-driven**, not tag-driven. Bump the `VERSION` file, then
 regenerate the skills (`go run ./cmd/slk generate-skills`) and run
 `scripts/sync-version.sh` (fans VERSION into `gemini-extension.json` +
-`SECURITY.md`) in a release PR; on merge to `main`,
+`SECURITY.md`) in a release PR. Note: `go run ./cmd/slk generate-manifest`
+is **not** a per-VERSION step — run it only when command annotations or scope
+sets change (guarded by the CI `manifest` job). On merge to `main`,
 `.github/workflows/release.yml` runs. A `gate` job derives `v<VERSION>` and skips
 if that tag already exists; otherwise the `goreleaser` job creates and pushes the
 tag and releases in the same run (the tag is an artifact of the release, not its
@@ -365,18 +383,22 @@ The `npm/` directory is a thin postinstall-driven wrapper:
 
 Runtime state:
 
-- OAuth tokens live in `~/.config/slk/config.toml` (mode `0600`,
-  TOML-encoded, multi-profile). The `user_token` and `bot_token` fields
-  are encrypted at rest with AES-256-GCM (`enc:v1:` prefix). The OAuth
-  `client_id` / `client_secret` are NOT persisted — `auth login` uses
-  them only transiently for the token exchange. The 32-byte key is held
-  in the OS keyring or, for
-  headless/agent use, a key file at `~/.config/slk/.encryption_key`
-  (mode `0600`); the backend is chosen by `SLK_KEYRING_BACKEND` (`auto`
-  default — keyring if available, else file) and recorded as
-  `key_backend` in the config. Tokens set via `set-token`/`login` are
-  encrypted on write; a pre-existing plaintext value is still read and
-  is encrypted on the next write (no re-auth).
+- Credentials live in `~/.config/slk/config.toml` (mode `0600`,
+  TOML-encoded, multi-profile). Each profile stores a **single `token`
+  field** (user `xoxp-` or bot `xoxb-`); token scope is derived at runtime
+  from the prefix via `auth.TokenScope` and is never stored. The old
+  `user_token`/`bot_token` dual-field layout is removed; legacy configs
+  with those keys are silently ignored on load (BurntSushi TOML drops
+  unknown keys) — a clean-break migration with no migration code. The
+  `token` field is encrypted at rest with AES-256-GCM (`enc:v1:` prefix).
+  The OAuth `client_id` / `client_secret` are NOT persisted — `auth login`
+  uses them only transiently for the token exchange. The 32-byte key is held
+  in the OS keyring or, for headless/agent use, a key file at
+  `~/.config/slk/.encryption_key` (mode `0600`); the backend is chosen by
+  `SLK_KEYRING_BACKEND` (`auto` default — keyring if available, else file)
+  and recorded as `key_backend` in the config. Tokens set via
+  `set-token`/`login` are encrypted on write; a pre-existing plaintext value
+  is still read and is encrypted on the next write (no re-auth).
 - The ID-to-name resolver caches in `~/.config/slk/cache/` (mode `0700`).
 - Env overrides: `SLK_PROFILE` (active profile), `SLK_TOKEN` (raw token,
   highest precedence), `SLK_CONFIG` (config path), and
@@ -425,18 +447,22 @@ Runtime state:
   ships ~5–10K tokens of schema and returns full message envelopes;
   slk emits 2–20-token confirmation lines by default.
 - **Coverage extends beyond MCP parity.** Once curation proved out, the
-  surface was expanded to wrap most user-token-reachable Web API methods,
-  not just the 13 MCP equivalents. The boundary is "what an OAuth user
-  token can be granted": included families are gated only by adding their
-  scope to the default set; excluded are Enterprise-Grid `admin.*`,
-  `xoxc`/`xoxd`-only, deprecated (`reminders.*`/`stars.*`), and
-  app-framework (`views`/`workflows`/`functions`/…) methods. The default
-  OAuth scope set (the `--scopes` default in `auth login`) was expanded
-  to 36 scopes so the curated commands work after a single re-auth.
-- **xoxp-only.** Any feature that requires `xoxc`/`xoxd` (drafts
-  list/delete/update, internal search modules) is intentionally
-  unimplemented. README's "Known Slack-side limitations" section is the
-  contract.
+  surface was expanded to wrap most user- or bot-token-reachable Web API
+  methods, not just the 13 MCP equivalents. The boundary is "what an OAuth
+  user or bot token can be granted": included families are gated only by
+  adding their scope to per-command annotations; excluded are Enterprise-Grid
+  `admin.*`, `xoxc`/`xoxd`-only browser tokens, deprecated
+  (`reminders.*`/`stars.*`), and app-framework
+  (`views`/`workflows`/`functions`/…) methods. The default OAuth scope set
+  for `auth login` is **generated at runtime** by `scopeUnion` from the
+  command tree's `userScopes`/`botScopes` annotations (adding a scope to a
+  command annotation widens the default automatically); the oracle locks
+  **37 user / 35 bot** scopes (`canvases:read` is included).
+- **OAuth tokens only; no `xoxc`/`xoxd` browser tokens.** Both `xoxp-`
+  (user) and `xoxb-` (bot) OAuth tokens are supported. Any feature that
+  requires `xoxc`/`xoxd` (drafts list/delete/update, internal search
+  modules) is intentionally unimplemented. README's "Known Slack-side
+  limitations" section is the contract.
 - **Canvas converter is in-house.** Off-the-shelf HTML→Markdown
   libraries drop `<lnk>` links, render quip code blocks as paragraphs,
   and lose checklist semantics — the three quip non-standardisms are
@@ -479,32 +505,55 @@ Runtime state:
   never rewrites the config on read.
 - **`auth set-token` and `auth login` share one interactive model;
   prompts are a human fallback, never for agents.** Fields can be supplied
-  by flags (the agent/script path, unchanged); set-token also reads tokens
-  from stdin via `--user -` / `--bot -` (keeps secrets out of shell
-  history). Otherwise, when stdin is a TTY, the missing fields are prompted
-  — tokens and the client secret entered hidden. Prompting is gated on a
-  TTY and suppressed by `--non-interactive`, so headless/agent callers
-  never block (a missing required value is a clear error, not a hang).
-  Shared resolution lives in `promptCtx` (`internal/commands/auth.go` +
-  `prompt.go`). set-token refuses a profile that resolves to no token
-  (previously a no-flag invocation silently saved an empty profile); login
-  mints a user token via OAuth and does NOT persist the `client_id` /
-  `client_secret` used for the exchange (non-interactive login defaults the
-  profile to `default` and prints a hint).
+  by flags (the agent/script path); set-token accepts a single `--token`
+  flag (or `--token -` to read from stdin; keeps secrets out of shell
+  history) with prefix validation (accepts `xoxp-`/`xoxb-` only; stores
+  the one token; scope is derived from the prefix). Otherwise, when stdin
+  is a TTY, the missing fields are prompted — tokens and the client secret
+  entered hidden. Prompting is gated on a TTY and suppressed by
+  `--non-interactive`, so headless/agent callers never block (a missing
+  required value is a clear error, not a hang). Shared resolution lives in
+  `promptCtx` (`internal/commands/auth.go` + `prompt.go`). set-token
+  refuses a profile that resolves to no token (previously a no-flag
+  invocation silently saved an empty profile); login mints a single token
+  via OAuth (`--as bot` → uses `scope=` in the authorize URL; default/user
+  → uses `user_scope=`) with default scopes generated by `scopeUnion`, and
+  does NOT persist the `client_id` / `client_secret` used for the exchange
+  (non-interactive login defaults the profile to `default` and prints a
+  hint).
 - **`auth status` verifies live, identity is derived not stored.** A profile
-  holds only its tokens — there is no stored workspace/label field (a removed
+  holds only its token — there is no stored workspace/label field (a removed
   cosmetic that no logic read; the profile name already disambiguates). Instead
-  `auth status` resolves identity live: by default it runs `auth.test` for the
-  active profile (`--all` for every profile, `--offline` to skip the network),
-  appending `<team> (<team_id>) — <user> (<user_id>) @ <url>`. Failures are
-  classified by the error type from the `liveIdentity` seam: an `*api.APIError`
-  is an invalid/rejected token, any other error is offline; a token Load could
-  not decrypt (`auth.IsEncrypted`) is flagged locally and never hits the
-  network. The check uses a short (4s) client timeout so offline fails fast, and
-  `--all` fans the per-profile `auth.test` calls out concurrently (results are
-  collected before printing to preserve sorted order). An older config's obsolete
-  `workspace` key is ignored on Load and dropped on the next Save (BurntSushi
-  toml ignores unknown keys).
+  `auth status` shows a derived `[user]`/`[bot]` scope label (also
+  `unknown`/`encrypted`/`none`) beside each profile name, and resolves identity
+  live: by default it runs `auth.test` for the active profile (`--all` for every
+  profile, `--offline` to skip the network), appending
+  `<team> (<team_id>) — <user> (<user_id>) @ <url>`. `--format json` emits a
+  structured object: `encryption{backend, status}`, `active`, and `profiles[]`
+  each with `name`/`active`/`scope`/`checked` and either `identity` on success
+  or `error` on failure. Failures are classified by the error type from the
+  `liveIdentity` seam: an `*api.APIError` is an invalid/rejected token, any
+  other error is offline; a token Load could not decrypt (`auth.IsEncrypted`) is
+  flagged locally and never hits the network. The check uses a short (4s) client
+  timeout so offline fails fast, and `--all` fans the per-profile `auth.test`
+  calls out concurrently (results are collected before printing to preserve
+  sorted order). An older config's obsolete `workspace` key is ignored on Load
+  and dropped on the next Save (BurntSushi toml ignores unknown keys).
+- **Bot-token support via annotations, not separate storage.** Each command
+  carries `userScopes`/`botScopes` annotations (comma-separated; empty means
+  no additional scope beyond auth) and a `botCapable` annotation (`"true"` for
+  commands that work with a bot token; `"false"` or absent for user-only verbs).
+  `buildClient` reads `botCapable`: a bot token on a user-only verb fails fast
+  with `*auth.AuthError` (exit 3) before any API call. `scopeUnion(root, mint)`
+  in `internal/commands/scopes.go` builds the sorted, de-duplicated scope set
+  for the chosen identity by walking the full command tree — this single source
+  feeds both `auth login` default scopes and `generate-manifest`. The oracle test
+  `TestScopeUnion_Oracle` locks the current counts (**37 user / 35 bot**); adding
+  a scope annotation to any command widens the defaults automatically. The README
+  app-manifest block (between `<!-- BEGIN/END GENERATED MANIFEST -->` markers) is
+  regenerated by `slk generate-manifest` from the same annotations and guarded by
+  the CI `manifest` job — run it on any scope or command annotation change, not
+  as part of a VERSION bump.
 - **The agent skill is a generated artifact (the binary is its SSOT).**
   Rather than hand-maintain `SKILL.md`, `slk generate-skills` renders a
   skill tree (a small `slk` index, a `slk-shared` reference, and one

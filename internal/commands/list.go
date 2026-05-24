@@ -77,6 +77,9 @@ func newListCreateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.create",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		Long: "Create a Slack List. Lists cannot be deleted via the public API (slackLists.delete does not exist) — remove them in the Slack UI.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -85,7 +88,7 @@ func newListCreateCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] slackLists.create name=%q\n", title)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -119,11 +122,16 @@ func parseListCreateID(raw []byte) string {
 func newListReadCommand(g *GlobalFlags) *cobra.Command {
 	var listID string
 	cmd := &cobra.Command{
-		Use:         "read",
-		Short:       "Read items in a List",
-		Annotations: map[string]string{"slackMethod": "slackLists.items.list"},
+		Use:   "read",
+		Short: "Read items in a List",
+		Annotations: map[string]string{
+			"slackMethod": "slackLists.items.list",
+			"userScopes":  "lists:read",
+			"botScopes":   "lists:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -156,6 +164,9 @@ func newListAddItemCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.items.create",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"list_id": listID, "initial_fields": fieldsJSON}
@@ -163,7 +174,7 @@ func newListAddItemCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] slackLists.items.create list_id=%s\n", listID)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -194,6 +205,9 @@ func newListUpdateItemCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.items.update",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cells, err := injectRowID(fieldsJSON, rowID)
@@ -205,7 +219,7 @@ func newListUpdateItemCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] slackLists.items.update list_id=%s row_id=%s\n", listID, rowID)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -241,6 +255,9 @@ func newListDeleteItemCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.items.delete",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		Long: "Deletes one List item. The whole-list delete API (slackLists.delete) does not exist — remove a List in the Slack UI.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -249,7 +266,7 @@ func newListDeleteItemCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] slackLists.items.delete %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -280,6 +297,9 @@ func newListUpdateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "slackLists.update",
 			"write":       "true",
+			"userScopes":  "lists:write",
+			"botScopes":   "lists:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"id": listID}
@@ -297,7 +317,7 @@ func newListUpdateCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] slackLists.update %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

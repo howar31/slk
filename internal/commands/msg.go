@@ -69,7 +69,7 @@ func newMsgCommand(g *GlobalFlags) *cobra.Command {
 		newMsgReadCommand(g),
 		newMsgSendCommand(g),
 		newMsgUpdateCommand(g),
-		newMsgWriteCommand(g, "delete", "chat.delete", []string{"channel", "ts"}),
+		newMsgDeleteCommand(g),
 		newMsgReactCommand(g),
 		newMsgUnreactCommand(g),
 		newMsgScheduleCommand(g),
@@ -89,11 +89,16 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 	var channel, oldest, latest, cursor string
 	var limit int
 	cmd := &cobra.Command{
-		Use:         "read",
-		Short:       "Read messages from a channel or DM",
-		Annotations: map[string]string{"slackMethod": "conversations.history"},
+		Use:   "read",
+		Short: "Read messages from a channel or DM",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.history",
+			"userScopes":  "channels:history,groups:history,im:history,mpim:history",
+			"botScopes":   "channels:history,groups:history,im:history,mpim:history",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -155,6 +160,9 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "chat.postMessage",
 			"write":       "true",
+			"userScopes":  "chat:write",
+			"botScopes":   "chat:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
@@ -172,7 +180,7 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -201,16 +209,19 @@ func newMsgSendCommand(g *GlobalFlags) *cobra.Command {
 	return cmd
 }
 
-// newMsgWriteCommand builds a simple write command mapping required flags to
-// Slack form params of the same name.
-func newMsgWriteCommand(g *GlobalFlags, use, method string, flags []string) *cobra.Command {
+func newMsgDeleteCommand(g *GlobalFlags) *cobra.Command {
 	values := map[string]*string{}
+	method := "chat.delete"
+	flags := []string{"channel", "ts"}
 	cmd := &cobra.Command{
-		Use:   use,
-		Short: use + " a message",
+		Use:   "delete",
+		Short: "delete a message",
 		Annotations: map[string]string{
 			"slackMethod": method,
 			"write":       "true",
+			"userScopes":  "chat:write",
+			"botScopes":   "chat:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{}
@@ -221,7 +232,7 @@ func newMsgWriteCommand(g *GlobalFlags, use, method string, flags []string) *cob
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] %s %v\n", method, params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -233,7 +244,7 @@ func newMsgWriteCommand(g *GlobalFlags, use, method string, flags []string) *cob
 				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
 				return nil
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), use+" ok")
+			fmt.Fprintln(cmd.OutOrStdout(), "delete ok")
 			return nil
 		},
 	}
@@ -254,6 +265,9 @@ func newMsgUpdateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "chat.update",
 			"write":       "true",
+			"userScopes":  "chat:write",
+			"botScopes":   "chat:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
@@ -265,7 +279,7 @@ func newMsgUpdateCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.update %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -298,6 +312,9 @@ func newMsgReactCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "reactions.add",
 			"write":       "true",
+			"userScopes":  "reactions:write",
+			"botScopes":   "reactions:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "timestamp": ts, "name": emoji}
@@ -305,7 +322,7 @@ func newMsgReactCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] reactions.add %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -377,6 +394,9 @@ func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "chat.scheduleMessage",
 			"write":       "true",
+			"userScopes":  "chat:write",
+			"botScopes":   "chat:write",
+			"botCapable":  "true",
 		},
 		Long: "Schedule a message. chat.deleteScheduledMessage may return ok=true for schedules within ~5 minutes of post_at yet the message still posts.",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -395,7 +415,7 @@ func newMsgScheduleCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.scheduleMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -446,6 +466,9 @@ func newMsgUnreactCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "reactions.remove",
 			"write":       "true",
+			"userScopes":  "reactions:write",
+			"botScopes":   "reactions:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "timestamp": ts, "name": emoji}
@@ -453,7 +476,7 @@ func newMsgUnreactCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] reactions.remove %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -487,6 +510,9 @@ func newMsgUnscheduleCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "chat.deleteScheduledMessage",
 			"write":       "true",
+			"userScopes":  "chat:write",
+			"botScopes":   "chat:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "scheduled_message_id": id}
@@ -494,7 +520,7 @@ func newMsgUnscheduleCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.deleteScheduledMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -544,11 +570,16 @@ func parseMsgScheduled(raw []byte) ([]searchHit, error) {
 func newMsgScheduledCommand(g *GlobalFlags) *cobra.Command {
 	var channel string
 	cmd := &cobra.Command{
-		Use:         "scheduled",
-		Short:       "List scheduled messages",
-		Annotations: map[string]string{"slackMethod": "chat.scheduledMessages.list"},
+		Use:   "scheduled",
+		Short: "List scheduled messages",
+		Annotations: map[string]string{
+			"slackMethod": "chat.scheduledMessages.list",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -578,11 +609,16 @@ func newMsgScheduledCommand(g *GlobalFlags) *cobra.Command {
 func newMsgPermalinkCommand(g *GlobalFlags) *cobra.Command {
 	var channel, ts string
 	cmd := &cobra.Command{
-		Use:         "permalink",
-		Short:       "Get the permalink for a message",
-		Annotations: map[string]string{"slackMethod": "chat.getPermalink"},
+		Use:   "permalink",
+		Short: "Get the permalink for a message",
+		Annotations: map[string]string{
+			"slackMethod": "chat.getPermalink",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -620,6 +656,9 @@ func newMsgEphemeralCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "chat.postEphemeral",
 			"write":       "true",
+			"userScopes":  "chat:write",
+			"botScopes":   "chat:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
@@ -631,7 +670,7 @@ func newMsgEphemeralCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postEphemeral %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -664,6 +703,9 @@ func newMsgMeCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "chat.meMessage",
 			"write":       "true",
+			"userScopes":  "chat:write",
+			"botScopes":   "chat:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "text": text}
@@ -671,7 +713,7 @@ func newMsgMeCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.meMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -721,11 +763,16 @@ func parseMsgReactions(raw []byte) ([]searchHit, error) {
 func newMsgReactionsCommand(g *GlobalFlags) *cobra.Command {
 	var channel, ts string
 	cmd := &cobra.Command{
-		Use:         "reactions",
-		Short:       "List reactions on a message",
-		Annotations: map[string]string{"slackMethod": "reactions.get"},
+		Use:   "reactions",
+		Short: "List reactions on a message",
+		Annotations: map[string]string{
+			"slackMethod": "reactions.get",
+			"userScopes":  "reactions:read",
+			"botScopes":   "reactions:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -790,11 +837,16 @@ func parseMsgReacted(raw []byte) ([]searchHit, error) {
 func newMsgReactedCommand(g *GlobalFlags) *cobra.Command {
 	var user string
 	cmd := &cobra.Command{
-		Use:         "reacted",
-		Short:       "List items the user has reacted to",
-		Annotations: map[string]string{"slackMethod": "reactions.list"},
+		Use:   "reacted",
+		Short: "List items the user has reacted to",
+		Annotations: map[string]string{
+			"slackMethod": "reactions.list",
+			"userScopes":  "reactions:read",
+			"botScopes":   "reactions:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -829,6 +881,9 @@ func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "drafts.create",
 			"write":       "true",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
@@ -855,7 +910,7 @@ func newMsgDraftCommand(g *GlobalFlags) *cobra.Command {
 				"is_from_composer": "true",
 			}
 
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

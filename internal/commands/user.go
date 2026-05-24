@@ -59,9 +59,14 @@ func newUserListCommand(g *GlobalFlags) *cobra.Command {
 	var cursor string
 	var includeBots, includeDeactivated bool
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List workspace users",
-		Annotations: map[string]string{"slackMethod": "users.list"},
+		Use:   "list",
+		Short: "List workspace users",
+		Annotations: map[string]string{
+			"slackMethod": "users.list",
+			"userScopes":  "users:read",
+			"botScopes":   "users:read",
+			"botCapable":  "true",
+		},
 		Long: `List workspace users.
 
 By default the output excludes bot users and deactivated accounts, which are
@@ -69,7 +74,7 @@ usually noise for agent workflows. Pass --include-bots / --include-deactivated
 to bring them back. --raw is not offered here: a multi-page response has no
 single raw envelope.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -166,11 +171,16 @@ func fetchUsersWith(client *api.Client, opts userListOpts) ([]searchHit, error) 
 func newUserInfoCommand(g *GlobalFlags) *cobra.Command {
 	var userID string
 	cmd := &cobra.Command{
-		Use:         "info",
-		Short:       "Show one user's profile",
-		Annotations: map[string]string{"slackMethod": "users.info"},
+		Use:   "info",
+		Short: "Show one user's profile",
+		Annotations: map[string]string{
+			"slackMethod": "users.info",
+			"userScopes":  "users:read",
+			"botScopes":   "users:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -220,11 +230,16 @@ func parseUserByEmail(raw []byte) (searchHit, error) {
 func newUserByEmailCommand(g *GlobalFlags) *cobra.Command {
 	var email string
 	cmd := &cobra.Command{
-		Use:         "by-email",
-		Short:       "Look up a user by email address",
-		Annotations: map[string]string{"slackMethod": "users.lookupByEmail"},
+		Use:   "by-email",
+		Short: "Look up a user by email address",
+		Annotations: map[string]string{
+			"slackMethod": "users.lookupByEmail",
+			"userScopes":  "users:read.email",
+			"botScopes":   "users:read.email",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -261,11 +276,16 @@ func (p userPresence) Concise() string {
 func newUserPresenceCommand(g *GlobalFlags) *cobra.Command {
 	var userID string
 	cmd := &cobra.Command{
-		Use:         "presence",
-		Short:       "Get a user's presence status",
-		Annotations: map[string]string{"slackMethod": "users.getPresence"},
+		Use:   "presence",
+		Short: "Get a user's presence status",
+		Annotations: map[string]string{
+			"slackMethod": "users.getPresence",
+			"userScopes":  "users:read",
+			"botScopes":   "users:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -314,12 +334,17 @@ func parseUserChannels(raw []byte) ([]searchHit, error) {
 func newUserChannelsCommand(g *GlobalFlags) *cobra.Command {
 	var userID, types string
 	cmd := &cobra.Command{
-		Use:         "channels",
-		Short:       "List channels a user belongs to",
-		Annotations: map[string]string{"slackMethod": "users.conversations"},
+		Use:   "channels",
+		Short: "List channels a user belongs to",
+		Annotations: map[string]string{
+			"slackMethod": "users.conversations",
+			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
+			"botScopes":   "channels:read,groups:read,im:read,mpim:read",
+			"botCapable":  "true",
+		},
 		// --raw is not offered here: a multi-page response has no single raw envelope.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -358,6 +383,9 @@ func newUserSetProfileCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "users.profile.set",
 			"write":       "true",
+			"userScopes":  "users.profile:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{}
@@ -371,7 +399,7 @@ func newUserSetProfileCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.profile.set %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -401,6 +429,9 @@ func newUserSetPhotoCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "users.setPhoto",
 			"write":       "true",
+			"userScopes":  "users.profile:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if g.DryRun {
@@ -411,7 +442,7 @@ func newUserSetPhotoCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -439,6 +470,9 @@ func newUserDeletePhotoCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "users.deletePhoto",
 			"write":       "true",
+			"userScopes":  "users.profile:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{}
@@ -446,7 +480,7 @@ func newUserDeletePhotoCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.deletePhoto %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -473,6 +507,9 @@ func newUserSetPresenceCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "users.setPresence",
 			"write":       "true",
+			"userScopes":  "users:write",
+			"botScopes":   "users:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"presence": presence}
@@ -480,7 +517,7 @@ func newUserSetPresenceCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] users.setPresence %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -505,11 +542,16 @@ func newUserProfileCommand(g *GlobalFlags) *cobra.Command {
 	var userID string
 	var includeLocale bool
 	cmd := &cobra.Command{
-		Use:         "profile",
-		Short:       "Show a user's profile fields",
-		Annotations: map[string]string{"slackMethod": "users.profile.get"},
+		Use:   "profile",
+		Short: "Show a user's profile fields",
+		Annotations: map[string]string{
+			"slackMethod": "users.profile.get",
+			"userScopes":  "users.profile:read",
+			"botScopes":   "users.profile:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

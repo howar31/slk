@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,8 +21,8 @@ func newAuthCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{Use: "auth", Short: "Manage Slack credentials"}
 	cmd.AddCommand(
 		newAuthSetTokenCommand(),
-		newAuthStatusCommand(),
-		newAuthLoginCommand(),
+		newAuthStatusCommand(g),
+		newAuthLoginCommand(g),
 		newAuthSwitchCommand(),
 		newAuthLogoutCommand(),
 		newAuthTestCommand(g),
@@ -32,11 +33,16 @@ func newAuthCommand(g *GlobalFlags) *cobra.Command {
 
 func newAuthTestCommand(g *GlobalFlags) *cobra.Command {
 	return &cobra.Command{
-		Use:         "test",
-		Short:       "Verify the active token and show its live identity",
-		Annotations: map[string]string{"slackMethod": "auth.test"},
+		Use:   "test",
+		Short: "Verify the active token and show its live identity",
+		Annotations: map[string]string{
+			"slackMethod": "auth.test",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -82,6 +88,9 @@ func newAuthRevokeCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "auth.revoke",
 			"write":       "true",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
 		},
 		Long: "Revoke the active token at Slack. This invalidates the token server-side; " +
 			"it does not remove the local profile (use `auth logout` for that).",
@@ -90,7 +99,7 @@ func newAuthRevokeCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintln(cmd.OutOrStdout(), "[dry-run] auth.revoke")
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -128,45 +137,81 @@ var (
 	exchangeCode = auth.ExchangeCode
 )
 
-// liveIdentity calls auth.test for token and returns the formatted identity line
-// for `auth status`. Seam: overridable in tests so status runs without a live
-// token or network. On failure it returns the error unchanged — an *api.APIError
-// when Slack rejected the call, any other error for transport/offline failures —
-// so the caller can classify it.
-var liveIdentity = func(token string) (string, error) {
+// authIdentity is the parsed auth.test identity for one profile.
+type authIdentity struct {
+	Team   string `json:"team"`
+	TeamID string `json:"team_id"`
+	User   string `json:"user"`
+	UserID string `json:"user_id"`
+	URL    string `json:"url"`
+}
+
+// profileStatus is the resolved status of one profile for `auth status`.
+type profileStatus struct {
+	Name     string        `json:"name"`
+	Active   bool          `json:"active"`
+	Scope    string        `json:"scope"` // user|bot|unknown|encrypted|none
+	Checked  bool          `json:"checked"`
+	Identity *authIdentity `json:"identity,omitempty"`
+	Error    string        `json:"error,omitempty"`
+}
+
+// profileScope derives the displayed scope of a profile's token.
+func profileScope(p auth.Profile) string {
+	if p.Token == "" {
+		return "none"
+	}
+	if auth.IsEncrypted(p.Token) {
+		return "encrypted"
+	}
+	if s := auth.TokenScope(p.Token); s != "" {
+		return s
+	}
+	return "unknown"
+}
+
+// parseAuthIdentity parses an auth.test response into an authIdentity.
+func parseAuthIdentity(raw []byte) (*authIdentity, error) {
+	var id authIdentity
+	if err := json.Unmarshal(raw, &id); err != nil {
+		return nil, err
+	}
+	return &id, nil
+}
+
+// liveIdentity calls auth.test for token and returns the parsed identity. Seam:
+// overridable in tests so status runs without a live token or network.
+var liveIdentity = func(token string) (*authIdentity, error) {
 	c := api.New(token)
 	c.HTTP.Timeout = 4 * time.Second
 	raw, err := c.Call("auth.test", nil, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return formatAuthIdentity(raw)
+	return parseAuthIdentity(raw)
 }
 
-// identitySuffix renders the live-check fragment for one profile in `auth status`:
-// the resolved identity on success, or a classified note. It never reaches the
-// network for a token Load could not decrypt. A Slack rejection (*api.APIError)
-// reads as an invalid token; any other error reads as offline.
-func identitySuffix(p auth.Profile) string {
-	token := p.UserToken
-	if token == "" {
-		token = p.BotToken
+// resolveProfileStatus builds the status for one profile. When check is false no
+// network call is made (Checked stays false). A Slack rejection reads as an
+// invalid token; any other error reads as offline.
+func resolveProfileStatus(name string, p auth.Profile, active, check bool) profileStatus {
+	st := profileStatus{Name: name, Active: active, Scope: profileScope(p)}
+	if !check || st.Scope == "none" || st.Scope == "encrypted" {
+		return st
 	}
-	if token == "" {
-		return "(no token)"
-	}
-	if auth.IsEncrypted(token) {
-		return "(local: token could not be decrypted)"
-	}
-	line, err := liveIdentity(token)
+	st.Checked = true
+	id, err := liveIdentity(p.Token)
 	if err != nil {
 		var apiErr *api.APIError
 		if errors.As(err, &apiErr) {
-			return fmt.Sprintf("(invalid token: %s)", apiErr.SlackError)
+			st.Error = fmt.Sprintf("invalid token: %s", apiErr.SlackError)
+		} else {
+			st.Error = "offline"
 		}
-		return "(offline: could not reach Slack)"
+		return st
 	}
-	return line
+	st.Identity = id
+	return st
 }
 
 // promptCtx bundles the I/O and interactivity state the auth commands resolve their
@@ -208,15 +253,17 @@ func (pc promptCtx) secret(flagVal string, changed, required bool, prompt string
 	return resolveSecret(pc.in, pc.errw, pc.fd, flagVal, changed, pc.interactive, required, prompt)
 }
 
+// B3: newAuthSetTokenCommand — single --token flag with prefix validation.
 func newAuthSetTokenCommand() *cobra.Command {
-	var profile, userToken, botToken string
+	var profile, token string
 	var nonInteractive bool
 	cmd := &cobra.Command{
 		Use:   "set-token",
-		Short: "Store tokens for a profile",
-		Long: "Store tokens for a profile. Pass values via flags for scripts/agents, or run " +
-			"with missing fields in a terminal to be prompted (token entry is hidden). Use " +
-			"--user - / --bot - to read a token from stdin.",
+		Short: "Store a token for a profile",
+		Long: "Store a single token (user xoxp- or bot xoxb-) for a profile. Pass --token for " +
+			"scripts/agents (use --token - to read from stdin), or run in a terminal to be " +
+			"prompted (token entry is hidden). A profile holds exactly one token; its scope is " +
+			"derived from the prefix.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pc := newPromptCtx(cmd, nonInteractive)
 			flags := cmd.Flags()
@@ -233,28 +280,19 @@ func newAuthSetTokenCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			p, existed := cfg.Profiles[name]
+			p := cfg.Profiles[name]
 
-			// A new profile must end up with a token; an existing one may keep its current.
-			ut, err := pc.secret(userToken, flags.Changed("user"), !existed, "Paste user token (xoxp-, hidden): ")
+			tok, err := pc.secret(token, flags.Changed("token"), true, "Paste token (xoxp- or xoxb-, hidden): ")
 			if err != nil {
 				return err
 			}
-			if ut != "" {
-				p.UserToken = ut
+			if tok == "" {
+				return fmt.Errorf("no token; pass --token <token> (use - to read stdin), or run in a terminal")
 			}
-
-			bt, err := pc.secret(botToken, flags.Changed("bot"), false, "Paste bot token (xoxb-, optional, hidden): ")
-			if err != nil {
-				return err
+			if auth.TokenScope(tok) == "" {
+				return fmt.Errorf("unsupported token prefix; slk accepts user (xoxp-) or bot (xoxb-) tokens only")
 			}
-			if bt != "" {
-				p.BotToken = bt
-			}
-
-			if p.UserToken == "" && p.BotToken == "" {
-				return fmt.Errorf("no token; pass --user <token> or --bot <token> (use - to read stdin), or run in a terminal")
-			}
+			p.Token = tok
 
 			cfg.Profiles[name] = p
 			if cfg.Active == "" {
@@ -268,39 +306,40 @@ func newAuthSetTokenCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&profile, "profile", "default", "profile name")
-	cmd.Flags().StringVar(&userToken, "user", "", "user token (xoxp-, or - to read stdin)")
-	cmd.Flags().StringVar(&botToken, "bot", "", "bot token (xoxb-, or - to read stdin)")
+	cmd.Flags().StringVar(&token, "token", "", "token (xoxp- or xoxb-, or - to read stdin)")
 	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "never prompt; require values via flags")
 	return cmd
 }
 
-func newAuthStatusCommand() *cobra.Command {
+// B4: newAuthStatusCommand — takes *GlobalFlags; derived [scope] label; --format json.
+func newAuthStatusCommand(g *GlobalFlags) *cobra.Command {
 	var all, offline bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show configured profiles",
-		Long: "Show configured profiles. By default the active profile is verified live " +
-			"against Slack (auth.test); pass --all to verify every profile, or --offline to " +
-			"list local info only without any network call.",
+		Long: "Show configured profiles with a derived [user]/[bot] scope label. By default the " +
+			"active profile is verified live (auth.test); --all verifies every profile, --offline " +
+			"skips the network. --format json emits a structured object.",
+		Annotations: map[string]string{
+			"slackMethod": "auth.test",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
-			if len(cfg.Profiles) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "no profiles configured")
+			out := cmd.OutOrStdout()
+			// Empty config: the human path prints a friendly line; the JSON path
+			// falls through to the main logic so it emits the full schema
+			// (encryption + active + empty profiles), consistent for callers.
+			if len(cfg.Profiles) == 0 && g.Format != "json" {
+				fmt.Fprintln(out, "no profiles configured")
 				return nil
 			}
 
-			// Encryption is a config-wide property (one key backend, one health
-			// line for the whole file), so it leads — separated from the per-profile
-			// table below.
-			fmt.Fprintln(cmd.OutOrStdout(), auth.EncryptionStatus(cfg))
-			fmt.Fprintln(cmd.OutOrStdout())
-
-			// Sort by name for a stable order (BurntSushi also writes profiles
-			// alphabetically, so this matches config.toml). Pad names to align the
-			// columns.
 			names := make([]string, 0, len(cfg.Profiles))
 			width := 0
 			for name := range cfg.Profiles {
@@ -311,46 +350,66 @@ func newAuthStatusCommand() *cobra.Command {
 			}
 			sort.Strings(names)
 
-			// Resolve the live-check suffix for each profile that needs one. --all
-			// fans out across every profile, so run the auth.test calls concurrently
-			// (each builds its own client; identitySuffix is safe to call in
-			// parallel) and collect results before printing to preserve order.
-			suffixes := make(map[string]string, len(names))
-			if !offline {
-				var mu sync.Mutex
-				var wg sync.WaitGroup
+			statuses := make(map[string]profileStatus, len(names))
+			var mu sync.Mutex
+			var wg sync.WaitGroup
+			for _, name := range names {
+				check := !offline && (all || name == cfg.Active)
+				wg.Add(1)
+				go func(name string, p auth.Profile) {
+					defer wg.Done()
+					s := resolveProfileStatus(name, p, name == cfg.Active, check)
+					mu.Lock()
+					statuses[name] = s
+					mu.Unlock()
+				}(name, cfg.Profiles[name])
+			}
+			wg.Wait()
+
+			if g.Format == "json" {
+				ordered := make([]profileStatus, 0, len(names))
 				for _, name := range names {
-					if !(all || name == cfg.Active) {
-						continue
-					}
-					wg.Add(1)
-					go func(name string, p auth.Profile) {
-						defer wg.Done()
-						s := identitySuffix(p)
-						mu.Lock()
-						suffixes[name] = s
-						mu.Unlock()
-					}(name, cfg.Profiles[name])
+					ordered = append(ordered, statuses[name])
 				}
-				wg.Wait()
+				encBackend, encStatus := auth.EncryptionInfo(cfg)
+				payload := struct {
+					Encryption struct {
+						Backend string `json:"backend"`
+						Status  string `json:"status"`
+					} `json:"encryption"`
+					Active   string          `json:"active"`
+					Profiles []profileStatus `json:"profiles"`
+				}{}
+				payload.Encryption.Backend = encBackend
+				payload.Encryption.Status = encStatus
+				payload.Active = cfg.Active
+				payload.Profiles = ordered
+				enc := json.NewEncoder(out)
+				enc.SetIndent("", "  ")
+				return enc.Encode(payload)
 			}
 
+			fmt.Fprintln(out, auth.EncryptionStatus(cfg))
+			fmt.Fprintln(out)
 			for _, name := range names {
-				p := cfg.Profiles[name]
+				st := statuses[name]
 				marker := " "
-				if name == cfg.Active {
+				if st.Active {
 					marker = "*"
 				}
-				line := fmt.Sprintf("%s %-*s (user=%v bot=%v)",
-					marker, width, name, p.UserToken != "", p.BotToken != "")
-				if s, ok := suffixes[name]; ok {
-					line += " — " + s
+				line := fmt.Sprintf("%s %-*s [%s]", marker, width, name, st.Scope)
+				switch {
+				case st.Identity != nil:
+					line += fmt.Sprintf(" — %s (%s) — %s (%s) @ %s",
+						st.Identity.Team, st.Identity.TeamID, st.Identity.User, st.Identity.UserID, st.Identity.URL)
+				case st.Error != "":
+					line += " — (" + st.Error + ")"
 				}
-				fmt.Fprintln(cmd.OutOrStdout(), line)
+				fmt.Fprintln(out, line)
 			}
 			if !offline && !all && len(names) > 1 {
-				fmt.Fprintln(cmd.OutOrStdout())
-				fmt.Fprintln(cmd.OutOrStdout(), "Run with --all to verify every profile, not just the active one.")
+				fmt.Fprintln(out)
+				fmt.Fprintln(out, "Run with --all to verify every profile, not just the active one.")
 			}
 			return nil
 		},
@@ -409,7 +468,8 @@ func newAuthLogoutCommand() *cobra.Command {
 	}
 }
 
-func newAuthLoginCommand() *cobra.Command {
+// B5: newAuthLoginCommand — takes *GlobalFlags; --as selects mint; stores single token.
+func newAuthLoginCommand(g *GlobalFlags) *cobra.Command {
 	var profile, clientID, clientSecret, scopes, port string
 	var nonInteractive bool
 	cmd := &cobra.Command{
@@ -417,7 +477,14 @@ func newAuthLoginCommand() *cobra.Command {
 		Short: "Run the OAuth flow with your own Slack app credentials",
 		Long: "Run the OAuth flow with your own Slack app credentials. Pass values via flags " +
 			"for scripts/agents, or run with missing fields in a terminal to be prompted (the " +
-			"client secret is entered hidden).",
+			"client secret is entered hidden). Use --as bot to mint a bot token instead of a " +
+			"user token.",
+		Annotations: map[string]string{
+			"slackMethod": "oauth.v2.access",
+			"userScopes":  "",
+			"botScopes":   "",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pc := newPromptCtx(cmd, nonInteractive)
 			flags := cmd.Flags()
@@ -442,11 +509,28 @@ func newAuthLoginCommand() *cobra.Command {
 				return fmt.Errorf("client id and secret are required; pass --client-id and --client-secret, or run in a terminal")
 			}
 
+			mint := g.Identity
+			if mint == "" {
+				mint = "user"
+			}
+			if mint != "user" && mint != "bot" {
+				return fmt.Errorf("--as must be user or bot")
+			}
+
+			scopeList := scopes
+			if !flags.Changed("scopes") {
+				scopeList = strings.Join(scopeUnion(cmd.Root(), mint), ",")
+			}
+
 			redirectURI := "http://localhost:" + port + "/callback"
 			q := url.Values{
 				"client_id":    {id},
-				"user_scope":   {scopes},
 				"redirect_uri": {redirectURI},
+			}
+			if mint == "bot" {
+				q.Set("scope", scopeList)
+			} else {
+				q.Set("user_scope", scopeList)
 			}
 			authURL := "https://slack.com/oauth/v2/authorize?" + q.Encode()
 			fmt.Fprintf(cmd.OutOrStdout(), "Open this URL to authorize:\n%s\n", authURL)
@@ -461,17 +545,20 @@ func newAuthLoginCommand() *cobra.Command {
 				return err
 			}
 
+			tok := pair.UserToken
+			if mint == "bot" {
+				tok = pair.BotToken
+			}
+			if tok == "" {
+				return fmt.Errorf("oauth returned no %s token (for --as bot, your app must have a bot user)", mint)
+			}
+
 			path, cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
 			p := cfg.Profiles[name]
-			if pair.UserToken != "" {
-				p.UserToken = pair.UserToken
-			}
-			if pair.BotToken != "" {
-				p.BotToken = pair.BotToken
-			}
+			p.Token = tok
 			cfg.Profiles[name] = p
 			if cfg.Active == "" {
 				cfg.Active = name
@@ -479,7 +566,7 @@ func newAuthLoginCommand() *cobra.Command {
 			if err := auth.Save(path, cfg); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "authorized profile %q\n", name)
+			fmt.Fprintf(cmd.OutOrStdout(), "authorized profile %q (%s)\n", name, mint)
 			if !pc.interactive && !flags.Changed("profile") {
 				fmt.Fprintln(cmd.ErrOrStderr(), "  (saved to the default profile; pass --profile to choose another)")
 			}
@@ -489,7 +576,7 @@ func newAuthLoginCommand() *cobra.Command {
 	cmd.Flags().StringVar(&profile, "profile", "default", "profile name")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "your Slack app client ID")
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "your Slack app client secret")
-	cmd.Flags().StringVar(&scopes, "scopes", "channels:history,channels:read,channels:write,groups:history,groups:read,groups:write,im:history,im:read,im:write,mpim:history,mpim:read,mpim:write,chat:write,reactions:write,reactions:read,search:read,users:read,users:write,users.profile:read,users.profile:write,files:read,files:write,canvases:read,canvases:write,lists:read,lists:write,pins:read,pins:write,bookmarks:read,bookmarks:write,team:read,emoji:read,dnd:read,dnd:write,usergroups:read,usergroups:write", "comma-separated user scopes")
+	cmd.Flags().StringVar(&scopes, "scopes", "", "comma-separated scopes to request (default: generated from supported commands for the chosen identity)")
 	cmd.Flags().StringVar(&port, "port", "3000", "local callback port")
 	cmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "never prompt; require values via flags")
 	return cmd

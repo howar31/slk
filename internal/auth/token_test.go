@@ -4,9 +4,9 @@ import "testing"
 
 func TestResolveToken_EnvWins(t *testing.T) {
 	cfg := &Config{Active: "work", Profiles: map[string]Profile{
-		"work": {UserToken: "xoxp-config"},
+		"work": {Token: "xoxb-config"},
 	}}
-	tok, err := ResolveToken(cfg, "", "user", "xoxp-env")
+	tok, err := ResolveToken(cfg, "", "", "xoxp-env")
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -15,20 +15,22 @@ func TestResolveToken_EnvWins(t *testing.T) {
 	}
 }
 
-func TestResolveToken_IdentitySelection(t *testing.T) {
+func TestResolveToken_SingleToken(t *testing.T) {
 	cfg := &Config{Active: "work", Profiles: map[string]Profile{
-		"work": {UserToken: "xoxp-u", BotToken: "xoxb-b"},
+		"work": {Token: "xoxb-bot"},
 	}}
-	u, _ := ResolveToken(cfg, "", "user", "")
-	b, _ := ResolveToken(cfg, "", "bot", "")
-	if u != "xoxp-u" || b != "xoxb-b" {
-		t.Fatalf("identity selection failed: user=%q bot=%q", u, b)
+	tok, err := ResolveToken(cfg, "", "", "")
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if tok != "xoxb-bot" {
+		t.Fatalf("got %q, want xoxb-bot", tok)
 	}
 }
 
 func TestResolveToken_MissingProfile(t *testing.T) {
 	cfg := &Config{Profiles: map[string]Profile{}}
-	if _, err := ResolveToken(cfg, "", "user", ""); err == nil {
+	if _, err := ResolveToken(cfg, "", "", ""); err == nil {
 		t.Fatal("expected error when no profile and no env token")
 	}
 }

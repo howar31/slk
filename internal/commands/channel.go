@@ -36,12 +36,17 @@ func newChannelListCommand(g *GlobalFlags) *cobra.Command {
 	var limit int
 	var cursor, types string
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List channels",
-		Annotations: map[string]string{"slackMethod": "conversations.list"},
+		Use:   "list",
+		Short: "List channels",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.list",
+			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
+			"botScopes":   "channels:read,groups:read,im:read,mpim:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// --raw is not offered here: a multi-page response has no single raw envelope.
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -82,6 +87,9 @@ func newChannelCreateCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.create",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"name": name}
@@ -92,7 +100,7 @@ func newChannelCreateCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.create %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -128,6 +136,9 @@ func newChannelArchiveCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.archive",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
@@ -135,7 +146,7 @@ func newChannelArchiveCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.archive %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -164,6 +175,9 @@ func newChannelInviteCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.invite",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		Long: "Invite users to a channel. Cannot invite a channel's creator or an existing member (Slack returns cant_invite_self / already_in_channel).",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -172,7 +186,7 @@ func newChannelInviteCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.invite %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -203,6 +217,9 @@ func newChannelTopicCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.setTopic",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "topic": topic}
@@ -210,7 +227,7 @@ func newChannelTopicCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.setTopic %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -277,11 +294,16 @@ func parseChannelMembers(raw []byte) ([]searchHit, string, error) {
 func newChannelInfoCommand(g *GlobalFlags) *cobra.Command {
 	var channel string
 	cmd := &cobra.Command{
-		Use:         "info",
-		Short:       "Show channel details",
-		Annotations: map[string]string{"slackMethod": "conversations.info"},
+		Use:   "info",
+		Short: "Show channel details",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.info",
+			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
+			"botScopes":   "channels:read,groups:read,im:read,mpim:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -311,9 +333,14 @@ func newChannelMembersCommand(g *GlobalFlags) *cobra.Command {
 		Use:   "members",
 		Short: "List channel members",
 		// --raw is not offered here: a multi-page response has no single raw envelope.
-		Annotations: map[string]string{"slackMethod": "conversations.members"},
+		Annotations: map[string]string{
+			"slackMethod": "conversations.members",
+			"userScopes":  "channels:read,groups:read,im:read,mpim:read",
+			"botScopes":   "channels:read,groups:read,im:read,mpim:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -351,6 +378,9 @@ func newChannelJoinCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.join",
 			"write":       "true",
+			"userScopes":  "channels:write",
+			"botScopes":   "channels:join",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
@@ -358,7 +388,7 @@ func newChannelJoinCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.join %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -387,6 +417,9 @@ func newChannelLeaveCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.leave",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
@@ -394,7 +427,7 @@ func newChannelLeaveCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.leave %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -423,6 +456,9 @@ func newChannelPurposeCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.setPurpose",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "purpose": purpose}
@@ -430,7 +466,7 @@ func newChannelPurposeCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.setPurpose %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -461,6 +497,9 @@ func newChannelKickCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.kick",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "user": user}
@@ -468,7 +507,7 @@ func newChannelKickCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.kick %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -499,6 +538,9 @@ func newChannelRenameCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.rename",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "name": name}
@@ -506,7 +548,7 @@ func newChannelRenameCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.rename %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -537,6 +579,9 @@ func newChannelUnarchiveCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.unarchive",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
@@ -544,7 +589,7 @@ func newChannelUnarchiveCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.unarchive %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -573,6 +618,9 @@ func newChannelOpenCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.open",
 			"write":       "true",
+			"userScopes":  "im:write,mpim:write",
+			"botScopes":   "im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"users": users}
@@ -580,7 +628,7 @@ func newChannelOpenCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.open %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -617,6 +665,9 @@ func newChannelMarkCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.mark",
 			"write":       "true",
+			"userScopes":  "channels:write,groups:write,im:write,mpim:write",
+			"botScopes":   "channels:manage,groups:write,im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "ts": ts}
@@ -624,7 +675,7 @@ func newChannelMarkCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.mark %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -655,6 +706,9 @@ func newChannelCloseCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "conversations.close",
 			"write":       "true",
+			"userScopes":  "im:write,mpim:write",
+			"botScopes":   "im:write,mpim:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel}
@@ -662,7 +716,7 @@ func newChannelCloseCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.close %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

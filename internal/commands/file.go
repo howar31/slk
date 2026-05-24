@@ -32,9 +32,14 @@ func newFileListCommand(g *GlobalFlags) *cobra.Command {
 		Use:   "list",
 		Short: "List files",
 		// --raw is not offered here: a multi-page response has no single raw envelope.
-		Annotations: map[string]string{"slackMethod": "files.list"},
+		Annotations: map[string]string{
+			"slackMethod": "files.list",
+			"userScopes":  "files:read",
+			"botScopes":   "files:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -118,11 +123,16 @@ func parseFileInfo(raw []byte) (searchHit, error) {
 func newFileInfoCommand(g *GlobalFlags) *cobra.Command {
 	var fileID string
 	cmd := &cobra.Command{
-		Use:         "info",
-		Short:       "Show file details",
-		Annotations: map[string]string{"slackMethod": "files.info"},
+		Use:   "info",
+		Short: "Show file details",
+		Annotations: map[string]string{
+			"slackMethod": "files.info",
+			"userScopes":  "files:read",
+			"botScopes":   "files:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -154,13 +164,16 @@ func newFileUploadCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "files.getUploadURLExternal",
 			"write":       "true",
+			"userScopes":  "files:write",
+			"botScopes":   "files:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if g.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] files.upload file=%s\n", filePath)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -246,6 +259,9 @@ func newFileDeleteCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "files.delete",
 			"write":       "true",
+			"userScopes":  "files:write",
+			"botScopes":   "files:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"file": fileID}
@@ -253,7 +269,7 @@ func newFileDeleteCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] files.delete %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -283,6 +299,9 @@ func newFilePublicCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "files.sharedPublicURL",
 			"write":       "true",
+			"userScopes":  "files:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"file": fileID}
@@ -290,7 +309,7 @@ func newFilePublicCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] files.sharedPublicURL %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -319,6 +338,9 @@ func newFileRevokePublicCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "files.revokePublicURL",
 			"write":       "true",
+			"userScopes":  "files:write",
+			"botScopes":   "",
+			"botCapable":  "false",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"file": fileID}
@@ -326,7 +348,7 @@ func newFileRevokePublicCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] files.revokePublicURL %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

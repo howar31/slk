@@ -26,6 +26,9 @@ func newPinAddCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "pins.add",
 			"write":       "true",
+			"userScopes":  "pins:write",
+			"botScopes":   "pins:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "timestamp": ts}
@@ -33,7 +36,7 @@ func newPinAddCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] pins.add %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -64,6 +67,9 @@ func newPinRemoveCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "pins.remove",
 			"write":       "true",
+			"userScopes":  "pins:write",
+			"botScopes":   "pins:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			params := map[string]string{"channel": channel, "timestamp": ts}
@@ -71,7 +77,7 @@ func newPinRemoveCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] pins.remove %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -97,11 +103,16 @@ func newPinRemoveCommand(g *GlobalFlags) *cobra.Command {
 func newPinListCommand(g *GlobalFlags) *cobra.Command {
 	var channel string
 	cmd := &cobra.Command{
-		Use:         "list",
-		Short:       "List pinned items in a channel",
-		Annotations: map[string]string{"slackMethod": "pins.list"},
+		Use:   "list",
+		Short: "List pinned items in a channel",
+		Annotations: map[string]string{
+			"slackMethod": "pins.list",
+			"userScopes":  "pins:read",
+			"botScopes":   "pins:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

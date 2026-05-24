@@ -37,11 +37,16 @@ func parseTeamInfo(raw []byte) (searchHit, error) {
 func newTeamInfoCommand(g *GlobalFlags) *cobra.Command {
 	var team string
 	cmd := &cobra.Command{
-		Use:         "info",
-		Short:       "Show workspace info",
-		Annotations: map[string]string{"slackMethod": "team.info"},
+		Use:   "info",
+		Short: "Show workspace info",
+		Annotations: map[string]string{
+			"slackMethod": "team.info",
+			"userScopes":  "team:read",
+			"botScopes":   "team:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -92,11 +97,16 @@ func parseTeamProfile(raw []byte) ([]searchHit, error) {
 
 func newTeamProfileCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:         "profile",
-		Short:       "List workspace profile fields",
-		Annotations: map[string]string{"slackMethod": "team.profile.get"},
+		Use:   "profile",
+		Short: "List workspace profile fields",
+		Annotations: map[string]string{
+			"slackMethod": "team.profile.get",
+			"userScopes":  "users.profile:read",
+			"botScopes":   "users.profile:read",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

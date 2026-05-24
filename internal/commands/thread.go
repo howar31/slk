@@ -18,11 +18,16 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 	var channel, thread, oldest, latest, cursor string
 	var limit int
 	cmd := &cobra.Command{
-		Use:         "read",
-		Short:       "Read replies in a thread",
-		Annotations: map[string]string{"slackMethod": "conversations.replies"},
+		Use:   "read",
+		Short: "Read replies in a thread",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.replies",
+			"userScopes":  "channels:history,groups:history,im:history,mpim:history",
+			"botScopes":   "channels:history,groups:history,im:history,mpim:history",
+			"botCapable":  "true",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
@@ -81,6 +86,9 @@ func newThreadReplyCommand(g *GlobalFlags) *cobra.Command {
 		Annotations: map[string]string{
 			"slackMethod": "chat.postMessage",
 			"write":       "true",
+			"userScopes":  "chat:write",
+			"botScopes":   "chat:write",
+			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			content, err := readContent(text, textFile, "--text", "--text-file")
@@ -92,7 +100,7 @@ func newThreadReplyCommand(g *GlobalFlags) *cobra.Command {
 				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] chat.postMessage %v\n", params)
 				return nil
 			}
-			client, err := buildClient(g)
+			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}

@@ -24,7 +24,7 @@ PREREQUISITE for every `slk-<group>` skill. Covers discovery, global flags, and 
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--as` | `user` | identity: user\|bot |
+| `--as` | — | identity user\|bot: on a command, assert the active token's scope; on 'auth login', which token to mint (default user) |
 | `--dry-run` | — | validate without calling the API |
 | `--format` | `concise` | output format: concise\|json\|jsonl\|table |
 | `--no-resolve` | — | do not resolve IDs to names |

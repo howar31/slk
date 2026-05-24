@@ -80,3 +80,21 @@ jobs:
             echo "::error::gemini-extension.json / SECURITY.md are out of date — run ./scripts/sync-version.sh and commit."
             exit 1
           fi
+
+  manifest:
+    name: Verify README manifest is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          check-latest: true
+      - name: Regenerate manifest
+        run: go run ./cmd/slk generate-manifest
+      - name: Fail on drift
+        run: |
+          if ! git diff --exit-code README.md; then
+            echo "::error::README.md manifest is out of date — run 'go run ./cmd/slk generate-manifest' and commit."
+            exit 1
+          fi
