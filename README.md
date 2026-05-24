@@ -178,9 +178,11 @@ Visit <https://api.slack.com/apps> → **Create New App**. Two paths:
   scope `slk` uses, so you can skip step 2 and go straight to installing.
 - **From scratch** — pick a name and workspace, then add scopes by hand in step 2.
 
-The manifest's `user:` list is every scope `slk`'s curated commands can use. Not every
-command needs every scope; trim the list to the subset you actually run.
+The manifest's `user:` list is every scope `slk`'s curated commands can use as a user token,
+and the `bot:` list covers the same commands that also work with a bot token. Not every command
+needs every scope; trim the list to the subset you actually run.
 
+<!-- BEGIN GENERATED MANIFEST -->
 ```json
 {
   "display_information": {
@@ -189,42 +191,80 @@ command needs every scope; trim the list to the subset you actually run.
   "oauth_config": {
     "scopes": {
       "user": [
+        "bookmarks:read",
+        "bookmarks:write",
+        "canvases:read",
+        "canvases:write",
         "channels:history",
         "channels:read",
         "channels:write",
+        "chat:write",
+        "dnd:read",
+        "dnd:write",
+        "emoji:read",
+        "files:read",
+        "files:write",
         "groups:history",
         "groups:read",
         "groups:write",
         "im:history",
         "im:read",
         "im:write",
+        "lists:read",
+        "lists:write",
         "mpim:history",
         "mpim:read",
         "mpim:write",
-        "chat:write",
+        "pins:read",
+        "pins:write",
         "reactions:read",
         "reactions:write",
         "search:read",
-        "users:read",
-        "users:write",
+        "team:read",
+        "usergroups:read",
+        "usergroups:write",
         "users.profile:read",
         "users.profile:write",
-        "files:read",
-        "files:write",
-        "canvases:read",
-        "canvases:write",
-        "lists:read",
-        "lists:write",
-        "pins:read",
-        "pins:write",
+        "users:read",
+        "users:read.email",
+        "users:write"
+      ],
+      "bot": [
         "bookmarks:read",
         "bookmarks:write",
-        "team:read",
-        "emoji:read",
+        "canvases:read",
+        "canvases:write",
+        "channels:history",
+        "channels:join",
+        "channels:manage",
+        "channels:read",
+        "chat:write",
         "dnd:read",
-        "dnd:write",
+        "emoji:read",
+        "files:read",
+        "files:write",
+        "groups:history",
+        "groups:read",
+        "groups:write",
+        "im:history",
+        "im:read",
+        "im:write",
+        "lists:read",
+        "lists:write",
+        "mpim:history",
+        "mpim:read",
+        "mpim:write",
+        "pins:read",
+        "pins:write",
+        "reactions:read",
+        "reactions:write",
+        "team:read",
         "usergroups:read",
-        "usergroups:write"
+        "usergroups:write",
+        "users.profile:read",
+        "users:read",
+        "users:read.email",
+        "users:write"
       ]
     }
   },
@@ -235,6 +275,7 @@ command needs every scope; trim the list to the subset you actually run.
   }
 }
 ```
+<!-- END GENERATED MANIFEST -->
 
 ### 2. Optional — Add or edit OAuth scopes (skip if you created from the manifest)
 

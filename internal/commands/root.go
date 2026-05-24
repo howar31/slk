@@ -37,6 +37,7 @@ func NewRootCommand(version string) *cobra.Command {
 		newUsergroupCommand(g),
 		newVersionCommand(g, version),
 		newGenerateSkillsCommand(version),
+		newGenerateManifestCommand(),
 	)
 	return root
 }
