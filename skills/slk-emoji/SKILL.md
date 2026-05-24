@@ -2,7 +2,7 @@
 name: slk-emoji
 description: "List custom emoji"
 metadata:
-  version: 0.7.0
+  version: 0.8.0
   openclaw:
     category: "productivity"
     requires:
