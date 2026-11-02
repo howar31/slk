@@ -65,6 +65,11 @@ func toCell(fv reflect.Value) string {
 	switch fv.Kind() {
 	case reflect.String:
 		return fv.String()
+	case reflect.Slice:
+		if fv.IsNil() {
+			return ""
+		}
+		fallthrough
 	default:
 		b, _ := json.Marshal(fv.Interface())
 		return string(b)

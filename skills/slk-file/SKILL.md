@@ -20,6 +20,7 @@ List and manage files
 | Command | Description |
 |---------|-------------|
 | `slk file delete` | Delete a file |
+| `slk file download` | Download a file |
 | `slk file info` | Show file details |
 | `slk file list` | List files |
 | `slk file public` | Make a file publicly accessible |
@@ -42,6 +43,24 @@ slk file delete [flags]
 
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
+
+## slk file download
+
+Download a file
+
+**Slack API:** `files.info`
+
+```bash
+slk file download [flags]
+```
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--file` | ✓ | — | file ID |
+| `--force` | — | — | overwrite an existing file |
+| `--out` | — | — | output file or directory (default: the file's name in the current directory) |
+
+**Tips:** Downloads a Slack-hosted file. Files hosted outside Slack are refused, because the token is only sent to Slack file hosts. An existing file is kept unless --force is set.
 
 ## slk file info
 

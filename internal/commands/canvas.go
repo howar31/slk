@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 
+	"github.com/howar31/slk/internal/api"
 	"github.com/howar31/slk/internal/output"
 	"github.com/howar31/slk/internal/quip"
 	"github.com/spf13/cobra"
@@ -95,6 +95,24 @@ func newCanvasCreateCommand(g *GlobalFlags) *cobra.Command {
 	return cmd
 }
 
+// canvasDownload fetches a canvas as the quip HTML Slack stores it in.
+func canvasDownload(client *api.Client, canvasID string) ([]byte, error) {
+	info, err := fetchFileMeta(client, canvasID)
+	if err != nil {
+		return nil, err
+	}
+	downloadURL := info.downloadURL()
+	if downloadURL == "" {
+		return nil, fmt.Errorf("canvas read: no download URL on file %s", canvasID)
+	}
+	resp, err := client.OpenPrivateFile(downloadURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
+}
+
 func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 	var canvasID string
 	var withSections bool
@@ -112,45 +130,11 @@ func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// 1. files.info → get url_private_download
-			raw, err := client.Call("files.info", map[string]string{"file": canvasID}, nil)
+			body, err := canvasDownload(client, canvasID)
 			if err != nil {
 				return err
-			}
-			var info struct {
-				File struct {
-					URLPrivateDownload string `json:"url_private_download"`
-					URLPrivate         string `json:"url_private"`
-				} `json:"file"`
-			}
-			if err := json.Unmarshal(raw, &info); err != nil {
-				return err
-			}
-			downloadURL := info.File.URLPrivateDownload
-			if downloadURL == "" {
-				downloadURL = info.File.URLPrivate
-			}
-			if downloadURL == "" {
-				return fmt.Errorf("canvas read: no download URL on file %s", canvasID)
 			}
 
-			// 2. Authenticated GET → HTML
-			req, _ := http.NewRequest("GET", downloadURL, nil)
-			req.Header.Set("Authorization", "Bearer "+client.Token)
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				return err
-			}
-			defer resp.Body.Close()
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return err
-			}
-			if resp.StatusCode != 200 {
-				return fmt.Errorf("canvas read: download returned %d", resp.StatusCode)
-			}
-
-			// 3. Output
 			if g.Raw {
 				fmt.Fprint(cmd.OutOrStdout(), string(body))
 				return nil

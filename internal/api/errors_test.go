@@ -12,6 +12,7 @@ func TestExitCodeFor(t *testing.T) {
 		"user_not_found":    4,
 		"thread_not_found":  4,
 		"message_not_found": 4,
+		"file_not_found":    4,
 		"ratelimited":       5,
 		"something_else":    1,
 	}

@@ -20,7 +20,7 @@ func ExitCodeFor(slackErr string) int {
 	switch slackErr {
 	case "invalid_auth", "token_expired", "not_authed", "account_inactive":
 		return 3
-	case "channel_not_found", "user_not_found", "thread_not_found", "message_not_found":
+	case "channel_not_found", "user_not_found", "thread_not_found", "message_not_found", "file_not_found":
 		return 4
 	case "ratelimited", "rate_limited":
 		return 5

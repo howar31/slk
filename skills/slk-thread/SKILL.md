@@ -34,12 +34,16 @@ slk thread read [flags]
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--channel` | ✓ | — | channel ID |
+| `--channel` | — | — | channel ID (required unless --url is set) |
 | `--cursor` | — | — | pagination cursor |
 | `--latest` | — | — | end of time range (ts) |
 | `--limit` | — | `100` | max replies |
 | `--oldest` | — | — | start of time range (ts) |
-| `--thread` | ✓ | — | parent message ts |
+| `--save-images` | — | — | directory to save attached images into |
+| `--thread` | — | — | parent message ts (required unless --url is set) |
+| `--url` | — | — | Slack message URL (instead of --channel and --thread) |
+
+**Tips:** Reads a thread. Output lists each message's attached files with their IDs. --url reads the thread a message URL belongs to, from any message in it.
 
 ## slk thread reply
 
