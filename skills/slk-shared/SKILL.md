@@ -2,7 +2,7 @@
 name: slk-shared
 description: "slk CLI: shared reference for authentication, global flags, and security rules."
 metadata:
-  version: 0.8.1
+  version: 0.9.0
   openclaw:
     category: "productivity"
     requires:

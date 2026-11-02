@@ -2,7 +2,7 @@
 name: slk-file
 description: "List and manage files"
 metadata:
-  version: 0.8.1
+  version: 0.9.0
   openclaw:
     category: "productivity"
     requires:
