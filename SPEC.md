@@ -337,20 +337,26 @@ trigger — no PAT needed). The release:
    `.github/release.yml`'s PR-label categories.
 3. Generates SLSA build provenance attestations via
    `actions/attest-build-provenance@v4`.
-4. Pushes a Homebrew formula update to `howar31/homebrew-tap` (uses the
-   `HOMEBREW_TAP_TOKEN` PAT). Prereleases skip the formula push via
-   goreleaser's `brews.skip_upload: auto` (the npm-only prerelease guard
-   in `release.yml` does not cover brews).
+4. Pushes a Homebrew cask update to `howar31/homebrew-tap` (uses the
+   `HOMEBREW_TAP_TOKEN` PAT). Prereleases skip the cask push via
+   goreleaser's `homebrew_casks.skip_upload: auto` (the npm-only prerelease
+   guard in `release.yml` does not cover Homebrew). The tap's
+   `tap_migrations.json` moves existing formula installs to the cask.
 5. For non-prerelease versions, runs a `publish-npm` job that bumps
    `npm/package.json`'s version to match `VERSION` and publishes
-   `@howar31/slk` (uses `NPM_TOKEN`). Prereleases skip the npm publish.
+   `@howar31/slk` through npm trusted publishing (OIDC, no token), which
+   also generates npm provenance. Prereleases skip the npm publish.
 
-Both release secrets expire and must be rotated, or the corresponding
-step fails on the next release:
+npm trusted publishing is configured on npmjs.com under the package's
+settings: GitHub Actions publisher, user `howar31`, repository `slk`, workflow
+`release.yml`, with direct `npm publish` enabled under Allowed actions. It
+relies on `id-token: write` in `release.yml` and on `npm/package.json`'s
+`repository.url` matching the repo. npm does not validate the configuration
+when it is saved; a mismatch surfaces as a failed `npm publish`.
 
-- `NPM_TOKEN` — npm granular token, **max 90-day** expiry (npm's hard
-  limit). Regenerate at npmjs.com (Read/write on `@howar31`) and
-  re-run `gh secret set NPM_TOKEN --repo howar31/slk`.
+The one release secret expires and must be rotated, or the step fails on the
+next release:
+
 - `HOMEBREW_TAP_TOKEN` — GitHub fine-grained PAT, up to ~1-year expiry,
   scope **Contents: Read and write** on `howar31/homebrew-tap` only.
 

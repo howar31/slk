@@ -20,18 +20,14 @@ changelog:
   use: github-native
 release:
   prerelease: auto
-brews:
+homebrew_casks:
   - repository:
       owner: howar31
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
-    # Do not push the formula on prereleases (tags containing "-");
-    # otherwise goreleaser would overwrite the stable tap formula with the
-    # prerelease, since the npm-only guard in release.yml does not cover brews.
+    # Do not push the cask on prereleases (tags containing "-"); otherwise
+    # goreleaser would overwrite the stable tap cask with the prerelease, since
+    # the npm-only guard in release.yml does not cover Homebrew.
     skip_upload: "auto"
     description: Agent-facing Slack CLI for AI agents.
-    license: MIT
     homepage: https://github.com/howar31/slk
-    test: |
-      assert_match version.to_s, shell_output("#{bin}/slk --version")

@@ -85,13 +85,12 @@ jobs:
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
       - name: Sync npm version with VERSION
         working-directory: npm
         run: npm version "${{ needs.gate.outputs.version }}" --no-git-tag-version
       - name: Publish to npm
         working-directory: npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
       - name: Smoke test packed package
         working-directory: npm
