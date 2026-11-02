@@ -337,10 +337,11 @@ trigger — no PAT needed). The release:
    `.github/release.yml`'s PR-label categories.
 3. Generates SLSA build provenance attestations via
    `actions/attest-build-provenance@v4`.
-4. Pushes a Homebrew formula update to `howar31/homebrew-tap` (uses the
-   `HOMEBREW_TAP_TOKEN` PAT). Prereleases skip the formula push via
-   goreleaser's `brews.skip_upload: auto` (the npm-only prerelease guard
-   in `release.yml` does not cover brews).
+4. Pushes a Homebrew cask update to `howar31/homebrew-tap` (uses the
+   `HOMEBREW_TAP_TOKEN` PAT). Prereleases skip the cask push via
+   goreleaser's `homebrew_casks.skip_upload: auto` (the npm-only prerelease
+   guard in `release.yml` does not cover Homebrew). The tap's
+   `tap_migrations.json` moves existing formula installs to the cask.
 5. For non-prerelease versions, runs a `publish-npm` job that bumps
    `npm/package.json`'s version to match `VERSION` and publishes
    `@howar31/slk` through npm trusted publishing (OIDC, no token), which
