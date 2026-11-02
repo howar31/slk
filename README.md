@@ -39,6 +39,7 @@ exposes `--raw` when a caller wants full API responses.
   - [Multi-line content](#multi-line-content)
   - [Drafts](#drafts)
   - [Slack Lists item shape](#slack-lists-item-shape)
+  - [Attached files and images](#attached-files-and-images)
   - [Escape hatch — `slk api`](#escape-hatch--slk-api)
 - [Environment variables](#environment-variables)
 - [Exit codes](#exit-codes)
@@ -549,6 +550,29 @@ slk list update-item --id F0… --row-id Rec0… --fields '[
 
 To update cells across multiple rows in one call, put `row_id` inside each cell; `--row-id`
 becomes the fallback for cells that omit it.
+
+### Attached files and images
+
+`msg read` and `thread read` list the files attached to each message. To read a message from a
+link, pass the URL from Slack's **Copy link** with `--url`: `msg read` reads that one message (or
+the channel, for a channel link), and `thread read` reads the whole thread.
+
+`--save-images <dir>` downloads attached images and shows each local path:
+
+```bash
+slk msg read --url https://acme.slack.com/archives/C0123456789/p1700000000123456 --save-images ./images
+slk thread read --channel C0123456789 --thread 1700000000.123456 --save-images ./images
+# Alice:  [11-14 22:13] [file F01234567 image.png image/png saved /path/to/images/F01234567-image.png]
+```
+
+- Files are named `<file ID>-<name>`, are readable only by the owner, and are not downloaded again
+  on later reads.
+- Other file types are listed but not saved; use `slk file download --file <ID>` for those.
+- If an image cannot be saved, the error appears on its message and the command exits `1` after
+  printing the output.
+- The token needs `files:read`, and a bot can only download files it has access to.
+- Files hosted outside Slack are refused, because the token is only sent to `files.slack.com`.
+- Images in link previews and forwarded messages are not listed.
 
 ### Escape hatch — `slk api`
 

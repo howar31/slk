@@ -186,11 +186,15 @@ slk msg read [flags]
 
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
-| `--channel` | ✓ | — | channel ID or user ID for a DM |
+| `--channel` | — | — | channel ID or user ID for a DM (required unless --url is set) |
 | `--cursor` | — | — | pagination cursor |
 | `--latest` | — | — | end of time range (ts) |
 | `--limit` | — | `50` | max messages |
 | `--oldest` | — | — | start of time range (ts) |
+| `--save-images` | — | — | directory to save attached images into |
+| `--url` | — | — | Slack channel or message URL (instead of --channel) |
+
+**Tips:** Reads messages from a channel or DM. Output lists each message's attached files with their IDs. --url reads a channel URL, or the single message a message URL points at.
 
 ## slk msg schedule
 

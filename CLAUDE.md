@@ -23,6 +23,7 @@ goreleaser release --snapshot --clean       # local dry-run only
 - One file per command group under `internal/commands/`, paired `_test.go` with dry-run + flag-registration checks.
 - Response-parsing helpers (`parseListCreateID`, `messageDisplay`, `injectRowID`, `fetchChannelsWith`, …) live alongside the command and are unit-tested via `httptest.NewServer` against `api.Client` with `BaseURL` overridden.
 - Write verbs MUST honor `--raw` (return raw Slack JSON when set) and `--dry-run` (print the about-to-fire call and return without hitting the API).
+- Slack file URLs are fetched only through `api.Client.OpenPrivateFile`, which guards where the token goes; never attach the token to a download yourself.
 - Exit codes: `0` ok · `3` auth · `4` not found · `5` rate-limited · `1` other. Mappings in `internal/api/errors.go`.
 
 ## Workflow rules

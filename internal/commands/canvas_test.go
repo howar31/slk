@@ -2,10 +2,16 @@ package commands
 
 import (
 	"bytes"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+
+	"github.com/howar31/slk/internal/api"
 )
 
 func TestCanvasHit_Concise(t *testing.T) {
@@ -233,5 +239,42 @@ func TestCanvasShareUnshare_RequireExactlyOneTarget(t *testing.T) {
 				t.Fatalf("%s: expected error when not exactly one of --users/--channels", tc.name)
 			}
 		})
+	}
+}
+
+func TestCanvasDownload_ReturnsHTML(t *testing.T) {
+	fake := newFakeSlackFiles(t, map[string]fakeSlackFile{
+		"F01234567": {"canvas", "application/vnd.slack-docs", "text/html", "<h1>Title</h1>"},
+	})
+
+	body, err := canvasDownload(fake.client, "F01234567")
+
+	if err != nil {
+		t.Fatalf("canvasDownload: %v", err)
+	}
+	if string(body) != "<h1>Title</h1>" {
+		t.Errorf("body = %q", body)
+	}
+}
+
+func TestCanvasDownload_RemoteFileSendsNoToken(t *testing.T) {
+	var hits atomic.Int32
+	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+	}))
+	defer remote.Close()
+	slack := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"ok":true,"file":{"id":"F01234567","mode":"external","is_external":true,"url_private":%q}}`, remote.URL+"/page")
+	}))
+	defer slack.Close()
+	c := api.New("xoxp-test")
+	c.BaseURL = slack.URL
+	c.HTTP = remote.Client()
+
+	if _, err := canvasDownload(c, "F01234567"); err == nil {
+		t.Fatal("expected an error for a remote file")
+	}
+	if hits.Load() != 0 {
+		t.Errorf("remote host received %d requests, want 0", hits.Load())
 	}
 }

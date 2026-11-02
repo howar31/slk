@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/howar31/slk/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -14,12 +13,30 @@ func newThreadCommand(g *GlobalFlags) *cobra.Command {
 	return cmd
 }
 
+// threadTSFromRef returns the ts of the thread a message URL belongs to.
+func threadTSFromRef(ref messageRef) (string, error) {
+	if ref.ThreadTS != "" {
+		return ref.ThreadTS, nil
+	}
+	if ref.TS != "" {
+		return ref.TS, nil
+	}
+	return "", fmt.Errorf("--url must point at a message, not a channel")
+}
+
 func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
-	var channel, thread, oldest, latest, cursor string
+	var channel, thread, messageURL, oldest, latest, cursor, imagesDir string
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "read",
 		Short: "Read replies in a thread",
+		Long: `Reads a thread. Output lists each message's attached files with their IDs.
+--url reads the thread a message URL belongs to, from any message in it.
+
+--save-images downloads attached images into a directory and reports each
+local path. It needs the files:read scope. Images already in the directory are
+reused. An image that cannot be saved is reported on its message and the
+command exits 1 after printing the output.`,
 		Annotations: map[string]string{
 			"slackMethod": "conversations.replies",
 			"userScopes":  "channels:history,groups:history,im:history,mpim:history",
@@ -27,6 +44,19 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if imagesDir != "" && g.Raw {
+				return fmt.Errorf("--save-images cannot be combined with --raw")
+			}
+			if messageURL != "" {
+				ref, err := parseMessageURL(messageURL)
+				if err != nil {
+					return err
+				}
+				if thread, err = threadTSFromRef(ref); err != nil {
+					return err
+				}
+				channel = ref.Channel
+			}
 			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
@@ -62,19 +92,23 @@ func newThreadReadCommand(g *GlobalFlags) *cobra.Command {
 			r := newResolver(g, client)
 			items := make([]msgItem, len(resp.Messages))
 			for i, m := range resp.Messages {
-				items[i] = msgItem{User: messageDisplay(r, m), Text: m.Text, TS: m.TS}
+				items[i] = msgItem{User: messageDisplay(r, m), Text: m.Text, TS: m.TS, Files: msgFiles(m.Files)}
 			}
-			return output.Emit(cmd.OutOrStdout(), g.Format, items)
+			return emitMessages(cmd, g, client, items, imagesDir)
 		},
 	}
-	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
-	cmd.Flags().StringVar(&thread, "thread", "", "parent message ts")
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID (required unless --url is set)")
+	cmd.Flags().StringVar(&thread, "thread", "", "parent message ts (required unless --url is set)")
+	cmd.Flags().StringVar(&messageURL, "url", "", "Slack message URL (instead of --channel and --thread)")
 	cmd.Flags().IntVar(&limit, "limit", 100, "max replies")
 	cmd.Flags().StringVar(&oldest, "oldest", "", "start of time range (ts)")
 	cmd.Flags().StringVar(&latest, "latest", "", "end of time range (ts)")
 	cmd.Flags().StringVar(&cursor, "cursor", "", "pagination cursor")
-	cmd.MarkFlagRequired("channel")
-	cmd.MarkFlagRequired("thread")
+	cmd.Flags().StringVar(&imagesDir, "save-images", "", "directory to save attached images into")
+	cmd.MarkFlagsRequiredTogether("channel", "thread")
+	cmd.MarkFlagsOneRequired("channel", "url")
+	cmd.MarkFlagsMutuallyExclusive("channel", "url")
+	cmd.MarkFlagsMutuallyExclusive("thread", "url")
 	return cmd
 }
 

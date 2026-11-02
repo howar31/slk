@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -506,5 +507,241 @@ func TestMsgPermalink_Httptest(t *testing.T) {
 	}
 	if resp.Permalink != wantLink {
 		t.Errorf("permalink = %q, want %q", resp.Permalink, wantLink)
+	}
+}
+
+func TestMsgItem_ConciseShowsFiles(t *testing.T) {
+	base := msgItem{User: "Alice", Text: "see this", TS: "1700000000.000100"}
+	stamp := shortTS(base.TS)
+	cases := []struct {
+		name  string
+		files []msgFile
+		want  string
+	}{
+		{"no files", nil, "Alice: see this [" + stamp + "]"},
+		{
+			"listed file",
+			[]msgFile{{ID: "F01234567", Name: "image.png", Mimetype: "image/png", Size: 10}},
+			"Alice: see this [" + stamp + "] [file F01234567 image.png image/png]",
+		},
+		{
+			"saved image",
+			[]msgFile{{ID: "F01234567", Name: "image.png", Mimetype: "image/png", Path: "/tmp/a.png"}},
+			"Alice: see this [" + stamp + "] [file F01234567 image.png image/png saved /tmp/a.png]",
+		},
+		{
+			"failed image",
+			[]msgFile{{ID: "F01234567", Name: "image.png", SaveError: "boom"}},
+			"Alice: see this [" + stamp + "] [file F01234567 image.png save failed: boom]",
+		},
+		{
+			"stub with only an ID, plus a second file",
+			[]msgFile{{ID: "F0000000A"}, {ID: "F0000000B", Name: "b.png"}},
+			"Alice: see this [" + stamp + "] [file F0000000A] [file F0000000B b.png]",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			item := base
+			item.Files = tc.files
+			if got := item.Concise(); got != tc.want {
+				t.Errorf("Concise() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestMsgFiles_FromSlackMessage(t *testing.T) {
+	raw := `{"text":"","files":[
+		{"id":"F0000000A","name":"image.png","mimetype":"image/png","size":79174,"mode":"hosted",
+		 "url_private":"https://files.slack.com/files-pri/T0-F0000000A/image.png"},
+		{"id":"F0000000B","mode":"tombstone"}]}`
+	var m slackMessage
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		t.Fatal(err)
+	}
+
+	got := msgFiles(m.Files)
+
+	want := []msgFile{
+		{ID: "F0000000A", Name: "image.png", Mimetype: "image/png", Size: 79174},
+		{ID: "F0000000B"},
+	}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("msgFiles = %+v, want %+v", got, want)
+	}
+}
+
+func TestMsgItem_JSONOmitsFilesWhenNone(t *testing.T) {
+	b, err := json.Marshal(msgItem{User: "Alice", Text: "hi", TS: "1.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "files") {
+		t.Errorf("json = %s", b)
+	}
+}
+
+func TestParseMessageURL(t *testing.T) {
+	cases := []struct {
+		name, url string
+		want      messageRef
+	}{
+		{"channel", "https://acme.slack.com/archives/C0123456789", messageRef{Channel: "C0123456789"}},
+		{"channel with trailing slash", "https://acme.slack.com/archives/C0123456789/", messageRef{Channel: "C0123456789"}},
+		{"message", "https://acme.slack.com/archives/C0123456789/p1700000000123456",
+			messageRef{Channel: "C0123456789", TS: "1700000000.123456"}},
+		{"dm message", "https://acme.slack.com/archives/D0123456789/p1700000000123456",
+			messageRef{Channel: "D0123456789", TS: "1700000000.123456"}},
+		{"reply", "https://acme.slack.com/archives/C0123456789/p1700000000123456?thread_ts=1700000000.000100&cid=C0123456789",
+			messageRef{Channel: "C0123456789", TS: "1700000000.123456", ThreadTS: "1700000000.000100"}},
+		{"enterprise host", "https://acme.enterprise.slack.com/archives/C0123456789/p1700000000123456",
+			messageRef{Channel: "C0123456789", TS: "1700000000.123456"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseMessageURL(tc.url)
+			if err != nil {
+				t.Fatalf("parseMessageURL: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("got %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseMessageURL_Rejects(t *testing.T) {
+	cases := []string{
+		"",
+		"C0123456789",
+		"https://app.slack.com/client/T0123456789/C0123456789",
+		"https://acme.slack.com/archives/",
+		"https://acme.slack.com/archives/C0123456789/1700000000123456",
+		"https://acme.slack.com/archives/C0123456789/p123",
+		"https://acme.slack.com/archives/C0123456789/p17000000001234xy",
+		"https://acme.slack.com/archives/C0123456789/p1700000000123456/extra",
+	}
+	for _, url := range cases {
+		if got, err := parseMessageURL(url); err == nil {
+			t.Errorf("parseMessageURL(%q) = %+v, want an error", url, got)
+		}
+	}
+}
+
+// fakeMessageAPI serves one canned response and records the call it received.
+func fakeMessageAPI(t *testing.T, response string) (*api.Client, *string, *map[string]string) {
+	t.Helper()
+	var path string
+	params := map[string]string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		path = r.URL.Path
+		for k := range r.Form {
+			params[k] = r.Form.Get(k)
+		}
+		fmt.Fprint(w, response)
+	}))
+	t.Cleanup(srv.Close)
+	c := api.New("xoxp-test")
+	c.BaseURL = srv.URL
+	return c, &path, &params
+}
+
+func TestFetchMessageByRef_TopLevelMessage(t *testing.T) {
+	c, path, params := fakeMessageAPI(t, `{"ok":true,"messages":[{"text":"hello","ts":"1700000000.123456"}]}`)
+
+	_, msgs, err := fetchMessageByRef(c, messageRef{Channel: "C0123456789", TS: "1700000000.123456"})
+	if err != nil {
+		t.Fatalf("fetchMessageByRef: %v", err)
+	}
+
+	if *path != "/conversations.history" {
+		t.Errorf("path = %s", *path)
+	}
+	for k, want := range map[string]string{
+		"channel": "C0123456789", "oldest": "1700000000.123456", "latest": "1700000000.123456", "inclusive": "true",
+	} {
+		if (*params)[k] != want {
+			t.Errorf("param %s = %q, want %q", k, (*params)[k], want)
+		}
+	}
+	if len(msgs) != 1 || msgs[0].Text != "hello" {
+		t.Errorf("msgs = %+v", msgs)
+	}
+}
+
+func TestFetchMessageByRef_ReplyDropsThreadParent(t *testing.T) {
+	c, path, params := fakeMessageAPI(t, `{"ok":true,"messages":[
+		{"text":"parent","ts":"1700000000.000100","thread_ts":"1700000000.000100"},
+		{"text":"reply","ts":"1700000000.123456","thread_ts":"1700000000.000100"}]}`)
+
+	_, msgs, err := fetchMessageByRef(c, messageRef{
+		Channel: "C0123456789", TS: "1700000000.123456", ThreadTS: "1700000000.000100",
+	})
+	if err != nil {
+		t.Fatalf("fetchMessageByRef: %v", err)
+	}
+
+	if *path != "/conversations.replies" || (*params)["ts"] != "1700000000.000100" {
+		t.Errorf("path = %s, ts = %q", *path, (*params)["ts"])
+	}
+	if len(msgs) != 1 || msgs[0].Text != "reply" {
+		t.Errorf("msgs = %+v", msgs)
+	}
+}
+
+func TestFetchMessageByRef_ThreadParentLinkUsesHistory(t *testing.T) {
+	c, path, _ := fakeMessageAPI(t, `{"ok":true,"messages":[{"text":"parent","ts":"1700000000.000100"}]}`)
+
+	_, _, err := fetchMessageByRef(c, messageRef{
+		Channel: "C0123456789", TS: "1700000000.000100", ThreadTS: "1700000000.000100",
+	})
+	if err != nil {
+		t.Fatalf("fetchMessageByRef: %v", err)
+	}
+	if *path != "/conversations.history" {
+		t.Errorf("path = %s", *path)
+	}
+}
+
+func TestFetchMessageByRef_MissingMessageExits4(t *testing.T) {
+	c, _, _ := fakeMessageAPI(t, `{"ok":true,"messages":[]}`)
+
+	_, _, err := fetchMessageByRef(c, messageRef{Channel: "C0123456789", TS: "1700000000.123456"})
+
+	var apiErr *api.APIError
+	if !errors.As(err, &apiErr) || apiErr.ExitCode() != 4 {
+		t.Fatalf("err = %v, want an APIError with exit code 4", err)
+	}
+}
+
+func TestMsgRead_FlagValidation(t *testing.T) {
+	const messageURL = "https://acme.slack.com/archives/C0123456789/p1700000000123456"
+	cases := []struct {
+		name    string
+		global  GlobalFlags
+		args    []string
+		wantErr string
+	}{
+		{"neither channel nor url", GlobalFlags{}, []string{"read"}, "channel"},
+		{"channel and url", GlobalFlags{}, []string{"read", "--channel", "C0123456789", "--url", messageURL}, "url"},
+		{"bad url", GlobalFlags{}, []string{"read", "--url", "https://acme.slack.com/x"}, "archives"},
+		{"message url with --oldest", GlobalFlags{}, []string{"read", "--url", messageURL, "--oldest", "1.0"}, "--oldest"},
+		{"raw with --save-images", GlobalFlags{Raw: true}, []string{"read", "--channel", "C0123456789", "--save-images", "x"}, "--save-images"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := tc.global
+			cmd := newMsgCommand(&g)
+			cmd.SilenceUsage, cmd.SilenceErrors = true, true
+			cmd.SetOut(&bytes.Buffer{})
+			cmd.SetErr(&bytes.Buffer{})
+			cmd.SetArgs(tc.args)
+			err := cmd.Execute()
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("err = %v, want one mentioning %q", err, tc.wantErr)
+			}
+		})
 	}
 }

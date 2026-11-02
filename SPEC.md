@@ -57,12 +57,30 @@ The escape hatch `slk api <method> --params '<json>'` lets callers
 invoke any Slack Web method bypassing curation; nested object values
 must be pre-serialized as JSON strings (form-urlencoded transport).
 
+File downloads have no Web API method: `files.info` supplies
+`url_private_download` / `url_private`, and an authenticated GET fetches the
+bytes. Every such GET goes through `api.Client.OpenPrivateFile`, the only place
+slk sends a token outside `BaseURL`. Remote files carry app-supplied URLs on
+any host, so the URL must be HTTPS with a host exactly in `Client.FileHosts`
+(`files.slack.com`); redirects outside that list are followed without
+credentials. `file download`, `msg read --save-images`,
+`thread read --save-images` and `canvas read` all use it.
+
+`msg read` and `thread read` list each message's attached files (`files` in
+JSON, `[file ...]` in concise output). `--save-images <dir>` saves images as
+`<file-id>-<name>` (mode 0600) because pasted screenshots share the name
+`image.png`; files already present are reused without calling Slack. A file
+without a mimetype (Slack Connect stub) is resolved through `files.info`. Per
+image failures land in `save_error` and the command exits 1 after printing.
+`--url` takes a `/archives/<channel>[/p<ts>]` link: `msg read` reads the channel
+or the single message, `thread read` the whole thread.
+
 Canvas reading is special: there is no public Slack endpoint that
 returns canvas content as markdown. `canvas read` calls `files.info`,
-authenticates a GET against `url_private_download`, and converts the
-returned quip HTML to Markdown via `internal/quip` — including
-non-standard `<lnk>`, code blocks (`class="prettyprint"`), checklists
-(`data-section-style='7'`), and table-cell section IDs.
+downloads the file, and converts the returned quip HTML to Markdown via
+`internal/quip` — including non-standard `<lnk>`, code blocks
+(`class="prettyprint"`), checklists (`data-section-style='7'`), and
+table-cell section IDs.
 
 Update checking is special too: `slk version --check` does not touch
 Slack and needs no token. It performs a single read-only GET to the
@@ -120,6 +138,7 @@ External dependencies are intentionally narrow:
 │   ├── api/                    # HTTP client, error mapping, paginator
 │   │   ├── client.go           # api.Client; BaseURL overridable for tests
 │   │   ├── multipart.go        # CallMultipart: multipart/form-data file upload
+│   │   ├── download.go         # OpenPrivateFile: token-guarded GET of Slack-hosted files
 │   │   ├── errors.go           # APIError + ExitCodeFor() mapping
 │   │   └── paginate.go         # CallAll: walks next_cursor up to N pages
 │   ├── auth/                   # credential management
@@ -155,7 +174,7 @@ External dependencies are intentionally narrow:
 │   │   │                       # channels / set-profile / set-photo / delete-photo /
 │   │   │                       # set-presence
 │   │   ├── search.go           # messages / channels / users / files / all
-│   │   ├── file.go             # files: list / info / upload / delete / public / revoke-public
+│   │   ├── file.go             # files: list / info / download / upload / delete / public / revoke-public
 │   │   ├── pin.go              # pins: add / remove / list
 │   │   ├── bookmark.go         # bookmarks: add / edit / remove / list
 │   │   ├── team.go             # team: info / profile
@@ -211,7 +230,8 @@ External dependencies are intentionally narrow:
 - **Comments are English**. Test names use `Test<Subject>_<Behavior>`.
 - **Exit codes**: `0` ok · `1` other · `2` (currently unused; reserved
   for Cobra usage errors) · `3` auth · `4` not found · `5` rate-limited.
-  Mappings live in `internal/api/errors.go::ExitCodeFor`.
+  Mappings live in `internal/api/errors.go::ExitCodeFor` (`file_not_found`
+  and the `message_not_found` raised by `msg read --url` both map to `4`).
 - **Resolver default**: `--no-resolve` short-circuits to `nil` so user
   ID rendering is opt-out, not opt-in.
 - **Concise output**: types implement `output.Concise` (a one-line
@@ -404,6 +424,8 @@ Runtime state:
 
 ## Known Limitations / Non-goals
 
+- **Attachments means a message's `files` array.** Images in link unfurls,
+  `attachments`, and forwarded messages are not listed or saved.
 - **No browser session tokens** (`xoxc`/`xoxd`). The trust property of
   the open-source binary requires public OAuth scopes only; this rules
   out `drafts.list`/`drafts.delete`/`drafts.update` and the internal

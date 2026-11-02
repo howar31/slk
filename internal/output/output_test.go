@@ -80,3 +80,17 @@ func TestEmit_NonSlice(t *testing.T) {
 		t.Fatal("expected error when items is not a slice")
 	}
 }
+
+func TestEmit_TableShowsNilSliceAsEmpty(t *testing.T) {
+	type row struct {
+		Name  string   `json:"name"`
+		Files []string `json:"files"`
+	}
+	var buf bytes.Buffer
+	if err := Emit(&buf, "table", []row{{Name: "Bob"}}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+	if strings.Contains(buf.String(), "null") {
+		t.Fatalf("table shows null for a nil slice: %q", buf.String())
+	}
+}

@@ -4,8 +4,12 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"regexp"
+	"strings"
 	"time"
 
+	"github.com/howar31/slk/internal/api"
 	"github.com/howar31/slk/internal/output"
 	"github.com/howar31/slk/internal/resolve"
 	"github.com/spf13/cobra"
@@ -13,14 +17,140 @@ import (
 
 // msgItem is one trimmed message.
 type msgItem struct {
-	User   string `json:"user"`
-	Text   string `json:"text"`
-	TS     string `json:"ts"`
-	Thread string `json:"thread,omitempty"`
+	User   string    `json:"user"`
+	Text   string    `json:"text"`
+	TS     string    `json:"ts"`
+	Thread string    `json:"thread,omitempty"`
+	Files  []msgFile `json:"files,omitempty"`
 }
 
 func (m msgItem) Concise() string {
-	return fmt.Sprintf("%s: %s [%s]", m.User, m.Text, shortTS(m.TS))
+	line := fmt.Sprintf("%s: %s [%s]", m.User, m.Text, shortTS(m.TS))
+	for _, f := range m.Files {
+		line += " " + f.Concise()
+	}
+	return line
+}
+
+// msgFile is one file attached to a message. Path and SaveError are filled in
+// when the file is saved locally.
+type msgFile struct {
+	ID        string `json:"id"`
+	Name      string `json:"name,omitempty"`
+	Mimetype  string `json:"mimetype,omitempty"`
+	Size      int64  `json:"size,omitempty"`
+	Path      string `json:"path,omitempty"`
+	SaveError string `json:"save_error,omitempty"`
+}
+
+func (f msgFile) Concise() string {
+	parts := []string{"file", f.ID}
+	if f.Name != "" {
+		parts = append(parts, f.Name)
+	}
+	if f.Mimetype != "" {
+		parts = append(parts, f.Mimetype)
+	}
+	if f.Path != "" {
+		parts = append(parts, "saved "+f.Path)
+	}
+	if f.SaveError != "" {
+		parts = append(parts, "save failed: "+f.SaveError)
+	}
+	return "[" + strings.Join(parts, " ") + "]"
+}
+
+// msgFiles trims a message's file objects for output.
+func msgFiles(files []slackFile) []msgFile {
+	if len(files) == 0 {
+		return nil
+	}
+	out := make([]msgFile, len(files))
+	for i, f := range files {
+		out[i] = msgFile{ID: f.ID, Name: f.Name, Mimetype: f.Mimetype, Size: f.Size}
+	}
+	return out
+}
+
+// emitMessages saves attached images when imagesDir is set, prints the items,
+// and reports any image that could not be saved as an error after the output.
+func emitMessages(cmd *cobra.Command, g *GlobalFlags, client *api.Client, items []msgItem, imagesDir string) error {
+	failed := 0
+	if imagesDir != "" {
+		failed = saveMessageImages(client, items, imagesDir)
+	}
+	if err := output.Emit(cmd.OutOrStdout(), g.Format, items); err != nil {
+		return err
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d image(s) could not be saved", failed)
+	}
+	return nil
+}
+
+// messageRef is what a Slack archive URL points at: a channel, and optionally
+// a message in it. ThreadTS is set on links to messages inside a thread.
+type messageRef struct {
+	Channel  string
+	TS       string
+	ThreadTS string
+}
+
+var archivePath = regexp.MustCompile(`^/archives/([A-Z0-9]+)(?:/p([0-9]{16}))?/?$`)
+
+// parseMessageURL reads the channel and message from a Slack archive URL, the
+// form produced by "Copy link". The message segment p1700000000123456 is the
+// ts 1700000000.123456 without its dot.
+func parseMessageURL(raw string) (messageRef, error) {
+	invalid := fmt.Errorf("--url must look like https://<workspace>.slack.com/archives/<channel>[/p<ts>], got %q", raw)
+	u, err := url.Parse(raw)
+	if err != nil {
+		return messageRef{}, invalid
+	}
+	match := archivePath.FindStringSubmatch(u.Path)
+	if match == nil {
+		return messageRef{}, invalid
+	}
+	ref := messageRef{Channel: match[1], ThreadTS: u.Query().Get("thread_ts")}
+	if digits := match[2]; digits != "" {
+		ref.TS = digits[:10] + "." + digits[10:]
+	}
+	return ref, nil
+}
+
+// fetchMessageByRef reads the one message ref points at. A reply is only
+// reachable through conversations.replies; it asks for two messages and
+// filters by ts because the thread parent can come back alongside the reply.
+func fetchMessageByRef(client *api.Client, ref messageRef) ([]byte, []slackMessage, error) {
+	method := "conversations.history"
+	params := map[string]string{
+		"channel":   ref.Channel,
+		"oldest":    ref.TS,
+		"latest":    ref.TS,
+		"inclusive": "true",
+		"limit":     "1",
+	}
+	if ref.ThreadTS != "" && ref.ThreadTS != ref.TS {
+		method = "conversations.replies"
+		params["ts"] = ref.ThreadTS
+		params["limit"] = "2"
+	}
+	raw, err := client.Call(method, params, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	var resp struct {
+		Messages []slackMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, nil, err
+	}
+	for _, m := range resp.Messages {
+		if m.TS == ref.TS {
+			return raw, []slackMessage{m}, nil
+		}
+	}
+	return nil, nil, &api.APIError{Method: method, SlackError: "message_not_found"}
 }
 
 // slackMessage is the subset of fields slk renders from
@@ -33,9 +163,10 @@ type slackMessage struct {
 	BotProfile struct {
 		Name string `json:"name"`
 	} `json:"bot_profile"`
-	Text     string `json:"text"`
-	TS       string `json:"ts"`
-	ThreadTS string `json:"thread_ts"`
+	Text     string      `json:"text"`
+	TS       string      `json:"ts"`
+	ThreadTS string      `json:"thread_ts"`
+	Files    []slackFile `json:"files"`
 }
 
 // messageDisplay picks the best human-visible name for a message.
@@ -86,11 +217,19 @@ func newMsgCommand(g *GlobalFlags) *cobra.Command {
 }
 
 func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
-	var channel, oldest, latest, cursor string
+	var channel, messageURL, oldest, latest, cursor, imagesDir string
 	var limit int
 	cmd := &cobra.Command{
 		Use:   "read",
 		Short: "Read messages from a channel or DM",
+		Long: `Reads messages from a channel or DM. Output lists each message's attached
+files with their IDs. --url reads a channel URL, or the single message a
+message URL points at.
+
+--save-images downloads attached images into a directory and reports each
+local path. It needs the files:read scope. Images already in the directory are
+reused. An image that cannot be saved is reported on its message and the
+command exits 1 after printing the output.`,
 		Annotations: map[string]string{
 			"slackMethod": "conversations.history",
 			"userScopes":  "channels:history,groups:history,im:history,mpim:history",
@@ -98,56 +237,87 @@ func newMsgReadCommand(g *GlobalFlags) *cobra.Command {
 			"botCapable":  "true",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if imagesDir != "" && g.Raw {
+				return fmt.Errorf("--save-images cannot be combined with --raw")
+			}
+			ref := messageRef{Channel: channel}
+			if messageURL != "" {
+				var err error
+				if ref, err = parseMessageURL(messageURL); err != nil {
+					return err
+				}
+			}
+			if ref.TS != "" {
+				for _, name := range []string{"oldest", "latest", "cursor", "limit"} {
+					if cmd.Flags().Changed(name) {
+						return fmt.Errorf("--%s does not apply to a message URL", name)
+					}
+				}
+			}
 			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
 			}
-			params := map[string]string{
-				"channel": channel,
-				"limit":   fmt.Sprintf("%d", limit),
-			}
-			if oldest != "" {
-				params["oldest"] = oldest
-			}
-			if latest != "" {
-				params["latest"] = latest
-			}
-			if cursor != "" {
-				params["cursor"] = cursor
-			}
-			raw, err := client.Call("conversations.history", params, nil)
-			if err != nil {
-				return err
+			var raw []byte
+			var messages []slackMessage
+			if ref.TS != "" {
+				raw, messages, err = fetchMessageByRef(client, ref)
+				if err != nil {
+					return err
+				}
+			} else {
+				params := map[string]string{
+					"channel": ref.Channel,
+					"limit":   fmt.Sprintf("%d", limit),
+				}
+				if oldest != "" {
+					params["oldest"] = oldest
+				}
+				if latest != "" {
+					params["latest"] = latest
+				}
+				if cursor != "" {
+					params["cursor"] = cursor
+				}
+				raw, err = client.Call("conversations.history", params, nil)
+				if err != nil {
+					return err
+				}
+				var resp struct {
+					Messages []slackMessage `json:"messages"`
+				}
+				if err := json.Unmarshal(raw, &resp); err != nil {
+					return err
+				}
+				messages = resp.Messages
 			}
 			if g.Raw {
 				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
 				return nil
 			}
-			var resp struct {
-				Messages []slackMessage `json:"messages"`
-			}
-			if err := json.Unmarshal(raw, &resp); err != nil {
-				return err
-			}
 			r := newResolver(g, client)
-			items := make([]msgItem, len(resp.Messages))
-			for i, m := range resp.Messages {
+			items := make([]msgItem, len(messages))
+			for i, m := range messages {
 				items[i] = msgItem{
 					User:   messageDisplay(r, m),
 					Text:   m.Text,
 					TS:     m.TS,
 					Thread: m.ThreadTS,
+					Files:  msgFiles(m.Files),
 				}
 			}
-			return output.Emit(cmd.OutOrStdout(), g.Format, items)
+			return emitMessages(cmd, g, client, items, imagesDir)
 		},
 	}
-	cmd.Flags().StringVar(&channel, "channel", "", "channel ID or user ID for a DM")
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID or user ID for a DM (required unless --url is set)")
+	cmd.Flags().StringVar(&messageURL, "url", "", "Slack channel or message URL (instead of --channel)")
 	cmd.Flags().IntVar(&limit, "limit", 50, "max messages")
 	cmd.Flags().StringVar(&oldest, "oldest", "", "start of time range (ts)")
 	cmd.Flags().StringVar(&latest, "latest", "", "end of time range (ts)")
 	cmd.Flags().StringVar(&cursor, "cursor", "", "pagination cursor")
-	cmd.MarkFlagRequired("channel")
+	cmd.Flags().StringVar(&imagesDir, "save-images", "", "directory to save attached images into")
+	cmd.MarkFlagsOneRequired("channel", "url")
+	cmd.MarkFlagsMutuallyExclusive("channel", "url")
 	return cmd
 }
 

@@ -16,7 +16,8 @@ type Client struct {
 	Token      string
 	BaseURL    string // overridable for tests; default https://slack.com/api
 	HTTP       *http.Client
-	MaxRetries int // rate-limit retries
+	MaxRetries int      // rate-limit retries
+	FileHosts  []string // hosts allowed to receive the token on file downloads
 }
 
 // New returns a Client for the given token.
@@ -26,6 +27,7 @@ func New(token string) *Client {
 		BaseURL:    "https://slack.com/api",
 		HTTP:       &http.Client{Timeout: 30 * time.Second},
 		MaxRetries: 3,
+		FileHosts:  []string{"files.slack.com"},
 	}
 }
 

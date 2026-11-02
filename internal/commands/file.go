@@ -2,10 +2,15 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"unicode"
 
+	"github.com/howar31/slk/internal/api"
 	"github.com/howar31/slk/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -15,6 +20,7 @@ func newFileCommand(g *GlobalFlags) *cobra.Command {
 	cmd.AddCommand(
 		newFileListCommand(g),
 		newFileInfoCommand(g),
+		newFileDownloadCommand(g),
 		newFileUploadCommand(g),
 		newFileDeleteCommand(g),
 		newFilePublicCommand(g),
@@ -154,6 +160,233 @@ func newFileInfoCommand(g *GlobalFlags) *cobra.Command {
 	cmd.Flags().StringVar(&fileID, "file", "", "file ID")
 	cmd.MarkFlagRequired("file")
 	return cmd
+}
+
+// slackFile is the subset of a Slack file object slk reads, as found in
+// files.info responses and in a message's files array.
+type slackFile struct {
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	Mimetype           string `json:"mimetype"`
+	Size               int64  `json:"size"`
+	URLPrivate         string `json:"url_private"`
+	URLPrivateDownload string `json:"url_private_download"`
+}
+
+// downloadURL prefers url_private_download, which Slack sets only on some files.
+func (f slackFile) downloadURL() string {
+	if f.URLPrivateDownload != "" {
+		return f.URLPrivateDownload
+	}
+	return f.URLPrivate
+}
+
+func fetchFileMeta(client *api.Client, fileID string) (slackFile, error) {
+	raw, err := client.Call("files.info", map[string]string{"file": fileID}, nil)
+	if err != nil {
+		return slackFile{}, err
+	}
+	var resp struct {
+		File slackFile `json:"file"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return slackFile{}, err
+	}
+	return resp.File, nil
+}
+
+func isHTML(mimetype string) bool {
+	return strings.HasPrefix(strings.ToLower(mimetype), "text/html")
+}
+
+func isImage(mimetype string) bool {
+	return strings.HasPrefix(strings.ToLower(mimetype), "image/")
+}
+
+// saveFile downloads a Slack-hosted file to dest. The file appears at dest only
+// once it is complete, and is readable by its owner alone because Slack files
+// can be private.
+func saveFile(client *api.Client, info slackFile, dest string) error {
+	downloadURL := info.downloadURL()
+	if downloadURL == "" {
+		return fmt.Errorf("file %s has no download URL", info.ID)
+	}
+	resp, err := client.OpenPrivateFile(downloadURL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	// An HTML response to a non-HTML file is a Slack page, not the file.
+	if isHTML(resp.Header.Get("Content-Type")) && !isHTML(info.Mimetype) {
+		return errors.New("Slack returned an HTML page instead of the file; check that the token has files:read and can access the file")
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".slk-download-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	_, err = io.Copy(tmp, resp.Body)
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return fmt.Errorf("writing file: %w", err)
+	}
+	return os.Rename(tmp.Name(), dest)
+}
+
+// safeFileName reduces a Slack-supplied file name to one path component, since
+// the name is chosen by whoever uploaded the file. The result is empty when
+// nothing usable remains.
+func safeFileName(name string) string {
+	name = strings.ReplaceAll(name, `\`, "/")
+	name = name[strings.LastIndex(name, "/")+1:]
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || strings.ContainsRune(`<>:"|?*`, r) {
+			return '_'
+		}
+		return r
+	}, name)
+	return strings.TrimLeft(name, ". ")
+}
+
+// downloadDest resolves where file download writes: --out as given, or the
+// file's name inside --out when it is a directory, or in the working directory
+// when --out is empty. An existing file is kept unless force is set.
+func downloadDest(out, fileName string, force bool) (string, error) {
+	dest := out
+	if stat, err := os.Stat(out); out == "" || (err == nil && stat.IsDir()) {
+		base := safeFileName(fileName)
+		if base == "" {
+			return "", fmt.Errorf("file name %q is not usable as a path; pass a file path with --out", fileName)
+		}
+		dest = filepath.Join(out, base)
+	}
+	if _, err := os.Stat(dest); err == nil && !force {
+		return "", fmt.Errorf("%s already exists; pass --force to overwrite", dest)
+	}
+	return dest, nil
+}
+
+func newFileDownloadCommand(g *GlobalFlags) *cobra.Command {
+	var fileID, out string
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "download",
+		Short: "Download a file",
+		Long: `Downloads a Slack-hosted file. Files hosted outside Slack are refused, because
+the token is only sent to Slack file hosts. An existing file is kept unless
+--force is set.`,
+		Annotations: map[string]string{
+			"slackMethod": "files.info",
+			"userScopes":  "files:read",
+			"botScopes":   "files:read",
+			"botCapable":  "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] files.info file=%s, then download\n", fileID)
+				return nil
+			}
+			client, err := buildClient(cmd, g)
+			if err != nil {
+				return err
+			}
+			info, err := fetchFileMeta(client, fileID)
+			if err != nil {
+				return err
+			}
+			dest, err := downloadDest(out, info.Name, force)
+			if err != nil {
+				return err
+			}
+			if err := saveFile(client, info, dest); err != nil {
+				return err
+			}
+			path, err := filepath.Abs(dest)
+			if err != nil {
+				return err
+			}
+			saved := msgFile{ID: info.ID, Name: info.Name, Mimetype: info.Mimetype, Size: info.Size, Path: path}
+			return output.Emit(cmd.OutOrStdout(), g.Format, []msgFile{saved})
+		},
+	}
+	cmd.Flags().StringVar(&fileID, "file", "", "file ID")
+	cmd.Flags().StringVar(&out, "out", "", "output file or directory (default: the file's name in the current directory)")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing file")
+	cmd.MarkFlagRequired("file")
+	return cmd
+}
+
+// saveMessageImages saves every image attached to items into dir, recording
+// the local path or the error on each file. It returns how many failed; one
+// failure does not stop the rest.
+func saveMessageImages(client *api.Client, items []msgItem, dir string) int {
+	failed := 0
+	for i := range items {
+		for j := range items[i].Files {
+			file := &items[i].Files[j]
+			if err := saveMessageImage(client, file, dir); err != nil {
+				file.SaveError = err.Error()
+				failed++
+			}
+		}
+	}
+	return failed
+}
+
+// messageImagePath prefixes the file ID because names repeat: pasted
+// screenshots are all called image.png.
+func messageImagePath(dir, fileID, name string) (string, error) {
+	return filepath.Abs(filepath.Join(dir, safeFileName(fileID)+"-"+safeFileName(name)))
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// saveMessageImage skips non-images and images already in dir without calling
+// Slack. A file listed without a mimetype (a Slack Connect stub) is looked up
+// first, since only files.info says what it is.
+func saveMessageImage(client *api.Client, file *msgFile, dir string) error {
+	if file.Mimetype != "" && !isImage(file.Mimetype) {
+		return nil
+	}
+	if file.Name != "" {
+		path, err := messageImagePath(dir, file.ID, file.Name)
+		if err != nil {
+			return err
+		}
+		if fileExists(path) {
+			file.Path = path
+			return nil
+		}
+	}
+
+	info, err := fetchFileMeta(client, file.ID)
+	if err != nil {
+		return err
+	}
+	file.Name, file.Mimetype, file.Size = info.Name, info.Mimetype, info.Size
+	if !isImage(info.Mimetype) {
+		return nil
+	}
+	path, err := messageImagePath(dir, file.ID, info.Name)
+	if err != nil {
+		return err
+	}
+	if !fileExists(path) {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+		if err := saveFile(client, info, path); err != nil {
+			return err
+		}
+	}
+	file.Path = path
+	return nil
 }
 
 func newFileUploadCommand(g *GlobalFlags) *cobra.Command {
