@@ -100,7 +100,15 @@ confirmations and ID-resolved reads — the regime `slk` is designed to shine in
 brew install howar31/tap/slk
 ```
 
-Adds the `howar31/homebrew-tap` cask automatically on first install. An existing formula install moves to the cask on `brew upgrade`.
+Adds the `howar31/homebrew-tap` cask automatically on first install.
+
+Versions before 0.9.0 were installed as a formula, which `brew upgrade` does not move to the cask.
+To switch:
+
+```bash
+brew uninstall --formula slk
+brew install howar31/tap/slk
+```
 
 ### npm (anywhere Node.js 18+ runs)
 
