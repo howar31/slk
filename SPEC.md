@@ -340,8 +340,9 @@ trigger — no PAT needed). The release:
 4. Pushes a Homebrew cask update to `howar31/homebrew-tap` (uses the
    `HOMEBREW_TAP_TOKEN` PAT). Prereleases skip the cask push via
    goreleaser's `homebrew_casks.skip_upload: auto` (the npm-only prerelease
-   guard in `release.yml` does not cover Homebrew). The tap's
-   `tap_migrations.json` moves existing formula installs to the cask.
+   guard in `release.yml` does not cover Homebrew). Existing formula installs
+   do not move on `brew upgrade`, even with the tap's `tap_migrations.json`;
+   they switch by uninstalling the formula and installing the cask.
 5. For non-prerelease versions, runs a `publish-npm` job that bumps
    `npm/package.json`'s version to match `VERSION` and publishes
    `@howar31/slk` through npm trusted publishing (OIDC, no token), which
@@ -437,14 +438,13 @@ Runtime state:
   out `drafts.list`/`drafts.delete`/`drafts.update` and the internal
   `search.modules.*` endpoints.
 - **No macOS code-signing / notarization.** Release binaries are
-  unsigned and un-notarized, and slk adds no Gatekeeper workaround (no
-  quarantine-strip hook, no `--no-quarantine` guidance);
-  `com.apple.quarantine` is treated as normal macOS behavior. Most
-  install paths do not quarantine (`curl`/`wget`, the npm postinstall
-  download, and Go's automatic ad-hoc `darwin/arm64` signing); a browser
-  download or a Homebrew Cask install does, and that first-run Gatekeeper
-  prompt is accepted. Developer ID signing + notarization (Apple
-  Developer Program, paid yearly) is judged not worth it for a CLI;
+  unsigned and un-notarized. Most install paths do not quarantine
+  (`curl`/`wget`, the npm postinstall download, and Go's automatic ad-hoc
+  `darwin/arm64` signing). A Homebrew Cask install does, and macOS then refuses
+  to run the binary with no option to open it, which also stops non-interactive
+  callers; so the cask removes `com.apple.quarantine` in a post-install step. A
+  browser download keeps the attribute. Developer ID signing + notarization
+  (Apple Developer Program, paid yearly) is judged not worth it for a CLI;
   revisit only on a strong external driver such as an official
   `homebrew/cask` submission (which requires notarization).
 - **Canvas read loses code-block language**: Slack's HTML route does

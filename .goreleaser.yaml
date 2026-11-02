@@ -31,3 +31,11 @@ homebrew_casks:
     skip_upload: "auto"
     description: Agent-facing Slack CLI for AI agents.
     homepage: https://github.com/howar31/slk
+    # Casks are quarantined on install, and macOS refuses to run the unsigned
+    # binary while the attribute is set.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/slk"]
+          end
