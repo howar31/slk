@@ -2,7 +2,7 @@
 name: slk-thread
 description: "Read and reply to threads"
 metadata:
-  version: 0.9.1
+  version: 0.10.0
   openclaw:
     category: "productivity"
     requires:
