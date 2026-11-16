@@ -32,7 +32,65 @@ func newCanvasCommand(g *GlobalFlags) *cobra.Command {
 		newCanvasDeleteCommand(g),
 		newCanvasShareCommand(g),
 		newCanvasUnshareCommand(g),
+		newCanvasCreateChannelCommand(g),
 	)
+	return cmd
+}
+
+func newCanvasCreateChannelCommand(g *GlobalFlags) *cobra.Command {
+	var channel, title, markdown, markdownFile string
+	cmd := &cobra.Command{
+		Use:   "create-channel",
+		Short: "Create the channel canvas of a channel",
+		Annotations: map[string]string{
+			"slackMethod": "conversations.canvases.create",
+			"write":       "true",
+			"userScopes":  "canvases:write",
+			"botScopes":   "canvases:write",
+			"botCapable":  "true",
+		},
+		Long: "Creates the canvas tabbed in a channel. A channel has at most one; Slack returns channel_canvas_already_exists when it has one, and its ID is in `channel info --raw` under properties.canvas.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			params := map[string]string{"channel_id": channel}
+			if title != "" {
+				params["title"] = title
+			}
+			if markdown != "" || markdownFile != "" {
+				content, err := readContent(markdown, markdownFile, "--markdown", "--markdown-file")
+				if err != nil {
+					return err
+				}
+				params["document_content"] = canvasDocumentContent(content)
+			}
+			if g.DryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "[dry-run] conversations.canvases.create channel_id=%s title=%q\n", channel, title)
+				return nil
+			}
+			client, err := buildClient(cmd, g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("conversations.canvases.create", params, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			var resp struct {
+				CanvasID string `json:"canvas_id"`
+			}
+			_ = json.Unmarshal(raw, &resp)
+			fmt.Fprintf(cmd.OutOrStdout(), "created channel canvas %s\n", resp.CanvasID)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&channel, "channel", "", "channel ID")
+	cmd.Flags().StringVar(&title, "title", "", "canvas title (optional)")
+	cmd.Flags().StringVar(&markdown, "markdown", "", "canvas body in markdown (optional)")
+	cmd.Flags().StringVar(&markdownFile, "markdown-file", "", "path to markdown file (use - for stdin)")
+	cmd.MarkFlagRequired("channel")
 	return cmd
 }
 
@@ -113,22 +171,65 @@ func canvasDownload(client *api.Client, canvasID string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
+// parseCanvasContent returns the markdown from a canvases.getContent response.
+func parseCanvasContent(raw []byte) (string, error) {
+	var resp struct {
+		Content *string `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return "", err
+	}
+	if resp.Content == nil {
+		return "", fmt.Errorf("canvases.getContent: response has no content field")
+	}
+	return *resp.Content, nil
+}
+
 func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
-	var canvasID string
+	var canvasID, source string
 	var withSections bool
 	cmd := &cobra.Command{
 		Use:   "read",
-		Short: "Read a canvas as markdown (HTML-converted)",
+		Short: "Read a canvas as markdown",
 		Annotations: map[string]string{
 			"slackMethod": "files.info",
 			"userScopes":  "files:read,canvases:read",
 			"botScopes":   "files:read,canvases:read",
 			"botCapable":  "true",
 		},
+		Long: `Reads a canvas as markdown. --source html (default) downloads the stored
+HTML (files.info) and converts it; --source content returns Slack's markdown
+from canvases.getContent. --with-sections needs --source html. --raw prints the
+HTML for --source html and the API response for --source content.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			switch source {
+			case "html":
+			case "content":
+				if withSections {
+					return fmt.Errorf("--with-sections requires --source html")
+				}
+			default:
+				return fmt.Errorf("--source must be html or content")
+			}
 			client, err := buildClient(cmd, g)
 			if err != nil {
 				return err
+			}
+			if source == "content" {
+				raw, err := client.Call("canvases.getContent", map[string]string{"canvas_id": canvasID}, nil)
+				if err != nil {
+					return err
+				}
+				if g.Raw {
+					fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+					return nil
+				}
+				content, err := parseCanvasContent(raw)
+				if err != nil {
+					return err
+				}
+				fmt.Fprint(cmd.OutOrStdout(), content)
+				return nil
 			}
 			body, err := canvasDownload(client, canvasID)
 			if err != nil {
@@ -158,6 +259,7 @@ func newCanvasReadCommand(g *GlobalFlags) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&canvasID, "id", "", "canvas ID")
 	cmd.Flags().BoolVar(&withSections, "with-sections", false, "also emit the section_id mapping (JSON output)")
+	cmd.Flags().StringVar(&source, "source", "html", "html (download and convert) or content (canvases.getContent)")
 	cmd.MarkFlagRequired("id")
 	return cmd
 }

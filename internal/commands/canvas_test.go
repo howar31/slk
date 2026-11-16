@@ -278,3 +278,55 @@ func TestCanvasDownload_RemoteFileSendsNoToken(t *testing.T) {
 		t.Errorf("remote host received %d requests, want 0", hits.Load())
 	}
 }
+
+func TestCanvasCreateChannel(t *testing.T) {
+	sub, _, err := newCanvasCommand(&GlobalFlags{}).Find([]string{"create-channel"})
+	if err != nil || sub.Name() != "create-channel" {
+		t.Fatalf("create-channel not found: %v", err)
+	}
+	for _, f := range []string{"channel", "title", "markdown", "markdown-file"} {
+		if sub.Flags().Lookup(f) == nil {
+			t.Errorf("missing flag --%s", f)
+		}
+	}
+
+	cmd := newCanvasCommand(&GlobalFlags{DryRun: true})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"create-channel", "--channel", "C0123456789"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !strings.Contains(out.String(), "conversations.canvases.create channel_id=C0123456789") {
+		t.Errorf("dry-run output = %q", out.String())
+	}
+}
+
+func TestParseCanvasContent(t *testing.T) {
+	got, err := parseCanvasContent([]byte(`{"ok":true,"content":"# Notes\n\n- [ ] Draft\n"}`))
+	if err != nil || got != "# Notes\n\n- [ ] Draft\n" {
+		t.Errorf("got %q, %v", got, err)
+	}
+	if got, err := parseCanvasContent([]byte(`{"ok":true,"content":""}`)); err != nil || got != "" {
+		t.Errorf("empty canvas: got %q, %v", got, err)
+	}
+	if _, err := parseCanvasContent([]byte(`{"ok":true}`)); err == nil {
+		t.Error("expected an error when content is missing")
+	}
+}
+
+func TestCanvasRead_SourceValidation(t *testing.T) {
+	cases := [][]string{
+		{"read", "--id", "F01234567", "--source", "pdf"},
+		{"read", "--id", "F01234567", "--source", "content", "--with-sections"},
+	}
+	for _, args := range cases {
+		cmd := newCanvasCommand(&GlobalFlags{})
+		cmd.SetOut(new(bytes.Buffer))
+		cmd.SetErr(new(bytes.Buffer))
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err == nil {
+			t.Errorf("%v: expected a validation error", args)
+		}
+	}
+}
