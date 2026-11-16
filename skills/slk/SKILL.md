@@ -58,6 +58,7 @@ Pick a group and open its skill for the verb-level reference.
 | `slk msg` | Read and send messages | [slk-msg](../slk-msg/SKILL.md) |
 | `slk pin` | Pin and unpin items | [slk-pin](../slk-pin/SKILL.md) |
 | `slk search` | Search messages, channels, users | [slk-search](../slk-search/SKILL.md) |
+| `slk slackbot-skill` | Manage Slackbot skills | [slk-slackbot-skill](../slk-slackbot-skill/SKILL.md) |
 | `slk team` | Inspect the workspace | [slk-team](../slk-team/SKILL.md) |
 | `slk thread` | Read and reply to threads | [slk-thread](../slk-thread/SKILL.md) |
 | `slk user` | List and inspect users | [slk-user](../slk-user/SKILL.md) |

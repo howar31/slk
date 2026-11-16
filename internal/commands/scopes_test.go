@@ -15,7 +15,8 @@ func TestScopeUnion_Oracle(t *testing.T) {
 		"groups:history", "groups:read", "groups:write", "im:history", "im:read",
 		"im:write", "lists:read", "lists:write", "mpim:history", "mpim:read",
 		"mpim:write", "pins:read", "pins:write", "reactions:read", "reactions:write",
-		"search:read", "team:read", "usergroups:read", "usergroups:write",
+		"search:read", "skills:read", "skills:write", "team.billing:read", "team:read",
+		"usergroups:read", "usergroups:write",
 		"users.profile:read", "users.profile:write", "users:read", "users:read.email",
 		"users:write",
 	}
@@ -26,6 +27,7 @@ func TestScopeUnion_Oracle(t *testing.T) {
 		"groups:history", "groups:read", "groups:write", "im:history", "im:read",
 		"im:write", "lists:read", "lists:write", "mpim:history", "mpim:read",
 		"mpim:write", "pins:read", "pins:write", "reactions:read", "reactions:write",
+		"skills:read", "skills:write", "team.billing:read",
 		"team:read", "usergroups:read", "usergroups:write", "users.profile:read",
 		"users:read", "users:read.email", "users:write",
 	}

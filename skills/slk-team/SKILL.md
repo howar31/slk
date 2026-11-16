@@ -19,8 +19,19 @@ Inspect the workspace
 
 | Command | Description |
 |---------|-------------|
+| `slk team billing` | Show the workspace billing plan |
 | `slk team info` | Show workspace info |
 | `slk team profile` | List workspace profile fields |
+
+## slk team billing
+
+Show the workspace billing plan
+
+**Slack API:** `team.billing.info`
+
+```bash
+slk team billing
+```
 
 ## slk team info
 

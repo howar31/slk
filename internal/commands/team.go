@@ -10,7 +10,7 @@ import (
 
 func newTeamCommand(g *GlobalFlags) *cobra.Command {
 	cmd := &cobra.Command{Use: "team", Short: "Inspect the workspace"}
-	cmd.AddCommand(newTeamInfoCommand(g), newTeamProfileCommand(g))
+	cmd.AddCommand(newTeamInfoCommand(g), newTeamProfileCommand(g), newTeamBillingCommand(g))
 	return cmd
 }
 
@@ -123,6 +123,64 @@ func newTeamProfileCommand(g *GlobalFlags) *cobra.Command {
 				return err
 			}
 			return output.Emit(cmd.OutOrStdout(), g.Format, hits)
+		},
+	}
+	return cmd
+}
+
+// teamPlanNames maps team.billing.info plan values to Slack's plan names.
+var teamPlanNames = map[string]string{
+	"free":       "Free",
+	"std":        "Pro",
+	"plus":       "Business+",
+	"enterprise": "Enterprise",
+	"compliance": "Enterprise Compliance Select",
+}
+
+// parseTeamBilling returns the plan from a team.billing.info response as a
+// searchHit: Name is Slack's plan name, ID the raw plan value.
+func parseTeamBilling(raw []byte) (searchHit, error) {
+	var resp struct {
+		Plan string `json:"plan"`
+	}
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return searchHit{}, err
+	}
+	name, ok := teamPlanNames[resp.Plan]
+	if !ok {
+		name = resp.Plan
+	}
+	return searchHit{Name: name, ID: resp.Plan}, nil
+}
+
+func newTeamBillingCommand(g *GlobalFlags) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "billing",
+		Short: "Show the workspace billing plan",
+		Annotations: map[string]string{
+			"slackMethod": "team.billing.info",
+			"userScopes":  "team.billing:read",
+			"botScopes":   "team.billing:read",
+			"botCapable":  "true",
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, err := buildClient(cmd, g)
+			if err != nil {
+				return err
+			}
+			raw, err := client.Call("team.billing.info", nil, nil)
+			if err != nil {
+				return err
+			}
+			if g.Raw {
+				fmt.Fprintln(cmd.OutOrStdout(), string(raw))
+				return nil
+			}
+			hit, err := parseTeamBilling(raw)
+			if err != nil {
+				return err
+			}
+			return output.Emit(cmd.OutOrStdout(), g.Format, []searchHit{hit})
 		},
 	}
 	return cmd
