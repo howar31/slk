@@ -2,9 +2,17 @@ package commands
 
 import (
 	"bytes"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/howar31/slk/internal/api"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -182,6 +190,8 @@ func TestListCommand_HasSubcommands(t *testing.T) {
 		"create": false, "read": false,
 		"add-item": false, "update-item": false,
 		"delete-item": false, "update": false,
+		"item-info": false, "delete-items": false,
+		"share": false, "unshare": false,
 	}
 	for _, sub := range cmd.Commands() {
 		want[sub.Name()] = true
@@ -303,5 +313,227 @@ func TestListUpdate_DryRun_OnlySetParams(t *testing.T) {
 	}
 	if strings.Contains(got, "todo_mode") {
 		t.Fatalf("dry-run must not include unset --todo-mode: %q", got)
+	}
+}
+
+func TestListNewVerbs_FlagRegistration(t *testing.T) {
+	cases := []struct {
+		verb     string
+		required []string
+		optional []string
+	}{
+		{"item-info", []string{"id", "row-id"}, nil},
+		{"delete-items", []string{"id", "row-ids"}, nil},
+		{"share", []string{"id", "access-level"}, []string{"users", "channels"}},
+		{"unshare", []string{"id"}, []string{"users", "channels"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.verb, func(t *testing.T) {
+			sub, _, err := newListCommand(&GlobalFlags{}).Find([]string{tc.verb})
+			if err != nil || sub.Name() != tc.verb {
+				t.Fatalf("subcommand %q not found: %v", tc.verb, err)
+			}
+			for _, f := range tc.required {
+				fl := sub.Flags().Lookup(f)
+				if fl == nil {
+					t.Errorf("missing flag --%s", f)
+					continue
+				}
+				if fl.Annotations[cobra.BashCompOneRequiredFlag] == nil {
+					t.Errorf("--%s should be required", f)
+				}
+			}
+			for _, f := range tc.optional {
+				if sub.Flags().Lookup(f) == nil {
+					t.Errorf("missing flag --%s", f)
+				}
+			}
+		})
+	}
+}
+
+func TestListNewVerbs_DryRun(t *testing.T) {
+	cases := []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"delete-items", "--id", "F01234567", "--row-ids", "Rec1, Rec2,"},
+			[]string{"slackLists.items.deleteMultiple", `"ids":["Rec1","Rec2"]`, `"list_id":"F01234567"`}},
+		{[]string{"share", "--id", "F01234567", "--access-level", "read", "--users", "U0123456789"},
+			[]string{"slackLists.access.set", "user_ids:U0123456789", "list_id:F01234567"}},
+		{[]string{"share", "--id", "F01234567", "--access-level", "write", "--channels", "C0123456789"},
+			[]string{"slackLists.access.set", "channel_ids:C0123456789"}},
+		{[]string{"unshare", "--id", "F01234567", "--channels", "C0123456789"},
+			[]string{"slackLists.access.delete", "channel_ids:C0123456789"}},
+	}
+	for _, tc := range cases {
+		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
+			cmd := newListCommand(&GlobalFlags{DryRun: true})
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetArgs(tc.args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute: %v", err)
+			}
+			for _, w := range tc.want {
+				if !strings.Contains(out.String(), w) {
+					t.Errorf("output %q missing %q", out.String(), w)
+				}
+			}
+		})
+	}
+}
+
+func TestListDeleteItems_RejectsEmptyIDs(t *testing.T) {
+	cmd := newListCommand(&GlobalFlags{DryRun: true})
+	cmd.SetOut(new(bytes.Buffer))
+	cmd.SetErr(new(bytes.Buffer))
+	cmd.SetArgs([]string{"delete-items", "--id", "F01234567", "--row-ids", " , "})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected an error for an empty --row-ids list")
+	}
+}
+
+func TestListShareUnshare_RequireExactlyOneTarget(t *testing.T) {
+	cases := [][]string{
+		{"share", "--id", "F01234567", "--access-level", "read"},
+		{"share", "--id", "F01234567", "--access-level", "read", "--users", "U0123456789", "--channels", "C0123456789"},
+		{"unshare", "--id", "F01234567"},
+		{"unshare", "--id", "F01234567", "--users", "U0123456789", "--channels", "C0123456789"},
+	}
+	for _, args := range cases {
+		cmd := newListCommand(&GlobalFlags{DryRun: true})
+		cmd.SetOut(new(bytes.Buffer))
+		cmd.SetErr(new(bytes.Buffer))
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err == nil {
+			t.Errorf("%v: expected an error when not exactly one of --users/--channels", args)
+		}
+	}
+}
+
+func TestParseListRecord(t *testing.T) {
+	raw := []byte(`{"ok":true,"list":{"id":"F01234567"},"record":{"id":"Rec1","list_id":"F01234567","fields":[{"text":""},{"text":"hello"}]},"subtasks":[]}`)
+	it, err := parseListRecord(raw)
+	if err != nil {
+		t.Fatalf("parseListRecord: %v", err)
+	}
+	if it.ID != "Rec1" || it.Text != "hello" {
+		t.Errorf("got %+v", it)
+	}
+	if _, err := parseListRecord([]byte("not json")); err == nil {
+		t.Error("expected an error for malformed JSON")
+	}
+}
+
+// fakeListExport serves slackLists.download.get with the given statuses in
+// order (the last one repeats) and the export file at /files-pri/export.
+func fakeListExport(t *testing.T, statuses ...string) (*api.Client, *atomic.Int32) {
+	t.Helper()
+	var gets atomic.Int32
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/slackLists.download.get":
+			_ = r.ParseForm()
+			if r.Form.Get("job_id") != "LeJob1" || r.Form.Get("format") != "csv" {
+				fmt.Fprint(w, `{"ok":false,"error":"invalid_arguments"}`)
+				return
+			}
+			n := int(gets.Add(1)) - 1
+			if n >= len(statuses) {
+				n = len(statuses) - 1
+			}
+			url := ""
+			if statuses[n] == "COMPLETED" {
+				url = "https://" + r.Host + "/files-pri/export"
+			}
+			fmt.Fprintf(w, `{"ok":true,"status":%q,"download_url":%q}`, statuses[n], url)
+		case "/files-pri/export":
+			w.Header().Set("Content-Type", "text/csv")
+			fmt.Fprint(w, "Title\nfirst\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	c := api.New("xoxp-test")
+	c.BaseURL = srv.URL
+	c.HTTP = srv.Client()
+	c.FileHosts = []string{"127.0.0.1"}
+	return c, &gets
+}
+
+func shortPoll(t *testing.T) {
+	old := listExportPollInterval
+	listExportPollInterval = time.Millisecond
+	t.Cleanup(func() { listExportPollInterval = old })
+}
+
+func TestWaitListExport_PollsUntilCompleted(t *testing.T) {
+	shortPoll(t)
+	c, gets := fakeListExport(t, "IN_PROGRESS", "IN_PROGRESS", "COMPLETED")
+	params := map[string]string{"list_id": "F01234567", "job_id": "LeJob1", "format": "csv"}
+	_, st, err := waitListExport(c, params, time.Second)
+	if err != nil {
+		t.Fatalf("waitListExport: %v", err)
+	}
+	if gets.Load() != 3 || !strings.HasSuffix(st.DownloadURL, "/files-pri/export") {
+		t.Errorf("gets=%d status=%+v", gets.Load(), st)
+	}
+
+	dest := filepath.Join(t.TempDir(), "out.csv")
+	if err := saveURL(c, st.DownloadURL, "text/csv", "lists:read", dest); err != nil {
+		t.Fatalf("saveURL: %v", err)
+	}
+	if b, _ := os.ReadFile(dest); string(b) != "Title\nfirst\n" {
+		t.Errorf("saved %q", b)
+	}
+}
+
+func TestWaitListExport_Failed(t *testing.T) {
+	shortPoll(t)
+	c, _ := fakeListExport(t, "FAILED")
+	params := map[string]string{"list_id": "F01234567", "job_id": "LeJob1", "format": "csv"}
+	if _, _, err := waitListExport(c, params, time.Second); err == nil {
+		t.Fatal("expected an error for a failed job")
+	}
+}
+
+func TestWaitListExport_Timeout(t *testing.T) {
+	shortPoll(t)
+	c, _ := fakeListExport(t, "IN_PROGRESS")
+	params := map[string]string{"list_id": "F01234567", "job_id": "LeJob1", "format": "csv"}
+	if _, _, err := waitListExport(c, params, 20*time.Millisecond); err == nil || !strings.Contains(err.Error(), "not completed") {
+		t.Fatalf("want a timeout error, got %v", err)
+	}
+}
+
+func TestListExport_DryRunAndValidation(t *testing.T) {
+	cmd := newListCommand(&GlobalFlags{DryRun: true})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"export", "--id", "F01234567", "--file-format", "json", "--include-threads"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	for _, w := range []string{"slackLists.download.start", "format:json", "include_threads:true"} {
+		if !strings.Contains(out.String(), w) {
+			t.Errorf("dry-run output %q missing %q", out.String(), w)
+		}
+	}
+
+	bad := [][]string{
+		{"export", "--id", "F01234567", "--file-format", "xlsx"},
+		{"export", "--id", "F01234567", "--include-threads"},
+		{"export", "--id", "F01234567", "--include-attachments"},
+	}
+	for _, args := range bad {
+		cmd := newListCommand(&GlobalFlags{DryRun: true})
+		cmd.SetOut(new(bytes.Buffer))
+		cmd.SetErr(new(bytes.Buffer))
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err == nil {
+			t.Errorf("%v: expected a validation error", args)
+		}
 	}
 }

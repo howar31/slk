@@ -2,7 +2,6 @@ package commands
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -211,14 +210,22 @@ func saveFile(client *api.Client, info slackFile, dest string) error {
 	if downloadURL == "" {
 		return fmt.Errorf("file %s has no download URL", info.ID)
 	}
+	return saveURL(client, downloadURL, info.Mimetype, "files:read", dest)
+}
+
+// saveURL downloads a Slack-hosted URL to dest through OpenPrivateFile.
+// mimetype is the expected content type; an HTML response to a non-HTML
+// mimetype is treated as a Slack error page, reported with scope as the
+// scope the caller needs.
+func saveURL(client *api.Client, downloadURL, mimetype, scope, dest string) error {
 	resp, err := client.OpenPrivateFile(downloadURL)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	// An HTML response to a non-HTML file is a Slack page, not the file.
-	if isHTML(resp.Header.Get("Content-Type")) && !isHTML(info.Mimetype) {
-		return errors.New("Slack returned an HTML page instead of the file; check that the token has files:read and can access the file")
+	if isHTML(resp.Header.Get("Content-Type")) && !isHTML(mimetype) {
+		return fmt.Errorf("Slack returned an HTML page instead of the file; check that the token has %s and can access the file", scope)
 	}
 
 	tmp, err := os.CreateTemp(filepath.Dir(dest), ".slk-download-*")
