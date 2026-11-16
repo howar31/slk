@@ -673,12 +673,13 @@ These behaviors come from Slack itself, not from `slk`:
   deletion of 1:1 DMs; use the Slack desktop or web UI.
 - **Slack Lists have no whole-list delete API.** `slackLists.delete` returns `unknown_method`,
   so an entire List must be removed in the Slack UI. Individual rows can be removed with
-  `list delete-item` (`slackLists.items.delete`).
+  `list delete-item` (`slackLists.items.delete`) or `list delete-items`
+  (`slackLists.items.deleteMultiple`).
 - **`channel invite` cannot invite a channel's creator or any existing member.** Slack
   returns `cant_invite_self` / `already_in_channel`. `slk` surfaces the error verbatim.
-- **`canvas read` cannot recover the original code-block language hint.** Slack's HTML
-  download route drops the triple-backtick language identifier. Text content is preserved;
-  the language tag is not.
+- **`canvas read --source html` (the default) cannot recover the original code-block
+  language hint.** Slack's HTML download route drops the triple-backtick language identifier.
+  Text content is preserved; the language tag is not.
 - **`drafts.list` / `drafts.delete` / `drafts.update` require a Slack-client token type
   that is not available to OAuth user tokens.** Manage drafts in the Slack UI.
 

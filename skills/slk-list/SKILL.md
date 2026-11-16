@@ -22,7 +22,12 @@ Create and manage Slack Lists
 | `slk list add-item` | Add an item to a List |
 | `slk list create` | Create a new List |
 | `slk list delete-item` | Delete one item from a List |
+| `slk list delete-items` | Delete several items from a List |
+| `slk list export` | Export a List to a CSV or JSON file |
+| `slk list item-info` | Read one item of a List |
 | `slk list read` | Read items in a List |
+| `slk list share` | Set access on a List for users or channels |
+| `slk list unshare` | Remove access on a List for users or channels |
 | `slk list update` | Update metadata of a List |
 | `slk list update-item` | Update an item in a List |
 
@@ -85,6 +90,62 @@ slk list delete-item [flags]
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
 
+## slk list delete-items
+
+Delete several items from a List
+
+**Slack API:** `slackLists.items.deleteMultiple`
+
+```bash
+slk list delete-items [flags]
+```
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--id` | ✓ | — | list ID |
+| `--row-ids` | ✓ | — | comma-separated row (item) IDs to delete |
+
+> [!CAUTION]
+> Write command — confirm with the user before executing; preview with `--dry-run`.
+
+## slk list export
+
+Export a List to a CSV or JSON file
+
+**Slack API:** `slackLists.download.start`
+
+```bash
+slk list export [flags]
+```
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--file-format` | — | `csv` | export format: csv or json |
+| `--force` | — | — | overwrite an existing file |
+| `--id` | ✓ | — | list ID |
+| `--include-archived` | — | — | include archived items |
+| `--include-attachments` | — | — | include attachment metadata (json only) |
+| `--include-threads` | — | — | include each item's thread (json only) |
+| `--out` | — | — | output file or directory (default: <list ID>.<format> in the current directory) |
+| `--timeout` | — | `1m0s` | how long to wait for the export job |
+
+**Tips:** Starts an export job (slackLists.download.start), waits for it (slackLists.download.get), and saves the file. --file-format is csv or json; --include-threads and --include-attachments apply to json only. With --raw, prints the slackLists.download.get response, which carries download_url, and saves nothing. An existing file is kept unless --force is set.
+
+## slk list item-info
+
+Read one item of a List
+
+**Slack API:** `slackLists.items.info`
+
+```bash
+slk list item-info [flags]
+```
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--id` | ✓ | — | list ID |
+| `--row-id` | ✓ | — | row (item) ID |
+
 ## slk list read
 
 Read items in a List
@@ -98,6 +159,47 @@ slk list read [flags]
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
 | `--id` | ✓ | — | list ID |
+
+## slk list share
+
+Set access on a List for users or channels
+
+**Slack API:** `slackLists.access.set`
+
+```bash
+slk list share [flags]
+```
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--access-level` | ✓ | — | access level: read, write, or owner |
+| `--channels` | — | — | comma-separated channel IDs to grant access |
+| `--id` | ✓ | — | list ID |
+| `--users` | — | — | comma-separated user IDs to grant access |
+
+**Tips:** Sets access on a List. --access-level is read, write, or owner; owner applies to --users only.
+
+> [!CAUTION]
+> Write command — confirm with the user before executing; preview with `--dry-run`.
+
+## slk list unshare
+
+Remove access on a List for users or channels
+
+**Slack API:** `slackLists.access.delete`
+
+```bash
+slk list unshare [flags]
+```
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--channels` | — | — | comma-separated channel IDs to remove access |
+| `--id` | ✓ | — | list ID |
+| `--users` | — | — | comma-separated user IDs to remove access |
+
+> [!CAUTION]
+> Write command — confirm with the user before executing; preview with `--dry-run`.
 
 ## slk list update
 

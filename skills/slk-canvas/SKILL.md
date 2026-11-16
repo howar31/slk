@@ -20,9 +20,10 @@ Create, read, update, list canvases
 | Command | Description |
 |---------|-------------|
 | `slk canvas create` | Create a standalone canvas |
+| `slk canvas create-channel` | Create the channel canvas of a channel |
 | `slk canvas delete` | Delete a canvas |
 | `slk canvas list` | List canvases via search.files |
-| `slk canvas read` | Read a canvas as markdown (HTML-converted) |
+| `slk canvas read` | Read a canvas as markdown |
 | `slk canvas share` | Set access on a canvas for users or channels |
 | `slk canvas unshare` | Remove access on a canvas for users or channels |
 | `slk canvas update` | Update a canvas's content |
@@ -42,6 +43,28 @@ slk canvas create [flags]
 | `--markdown` | — | — | canvas body in markdown |
 | `--markdown-file` | — | — | path to markdown file (use - for stdin) |
 | `--title` | ✓ | — | canvas title |
+
+> [!CAUTION]
+> Write command — confirm with the user before executing; preview with `--dry-run`.
+
+## slk canvas create-channel
+
+Create the channel canvas of a channel
+
+**Slack API:** `conversations.canvases.create`
+
+```bash
+slk canvas create-channel [flags]
+```
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--channel` | ✓ | — | channel ID |
+| `--markdown` | — | — | canvas body in markdown (optional) |
+| `--markdown-file` | — | — | path to markdown file (use - for stdin) |
+| `--title` | — | — | canvas title (optional) |
+
+**Tips:** Creates the canvas tabbed in a channel. A channel has at most one; Slack returns channel_canvas_already_exists when it has one, and its ID is in `channel info --raw` under properties.canvas.
 
 > [!CAUTION]
 > Write command — confirm with the user before executing; preview with `--dry-run`.
@@ -80,7 +103,7 @@ slk canvas list [flags]
 
 ## slk canvas read
 
-Read a canvas as markdown (HTML-converted)
+Read a canvas as markdown
 
 **Slack API:** `files.info`
 
@@ -91,7 +114,10 @@ slk canvas read [flags]
 | Flag | Required | Default | Description |
 |------|----------|---------|-------------|
 | `--id` | ✓ | — | canvas ID |
+| `--source` | — | `html` | html (download and convert) or content (canvases.getContent) |
 | `--with-sections` | — | — | also emit the section_id mapping (JSON output) |
+
+**Tips:** Reads a canvas as markdown. --source html (default) downloads the stored HTML (files.info) and converts it; --source content returns Slack's markdown from canvases.getContent. --with-sections needs --source html. --raw prints the HTML for --source html and the API response for --source content.
 
 ## slk canvas share
 

@@ -64,7 +64,8 @@ slk sends a token outside `BaseURL`. Remote files carry app-supplied URLs on
 any host, so the URL must be HTTPS with a host exactly in `Client.FileHosts`
 (`files.slack.com`); redirects outside that list are followed without
 credentials. `file download`, `msg read --save-images`,
-`thread read --save-images` and `canvas read` all use it.
+`thread read --save-images`, `canvas read` and `list export` (the
+`download_url` from `slackLists.download.get`) all use it.
 
 `msg read` and `thread read` list each message's attached files (`files` in
 JSON, `[file ...]` in concise output). `--save-images <dir>` saves images as
@@ -75,12 +76,13 @@ image failures land in `save_error` and the command exits 1 after printing.
 `--url` takes a `/archives/<channel>[/p<ts>]` link: `msg read` reads the channel
 or the single message, `thread read` the whole thread.
 
-Canvas reading is special: there is no public Slack endpoint that
-returns canvas content as markdown. `canvas read` calls `files.info`,
-downloads the file, and converts the returned quip HTML to Markdown via
-`internal/quip` — including non-standard `<lnk>`, code blocks
-(`class="prettyprint"`), checklists (`data-section-style='7'`), and
-table-cell section IDs.
+Canvas reading has two sources. `canvas read --source content` calls
+`canvases.getContent`, which returns Slack's own markdown (no section IDs).
+`canvas read --source html` (default) calls `files.info`, downloads the
+file, and converts the returned quip HTML to Markdown via `internal/quip` —
+including non-standard `<lnk>`, code blocks (`class="prettyprint"`),
+checklists (`data-section-style='7'`), and table-cell section IDs; it is
+the only source for `--with-sections`.
 
 Update checking is special too: `slk version --check` does not touch
 Slack and needs no token. It performs a single read-only GET to the
@@ -164,12 +166,14 @@ External dependencies are intentionally narrow:
 │   │   │                       # schedule / unschedule / scheduled / permalink /
 │   │   │                       # ephemeral / me / reactions / reacted / draft
 │   │   ├── thread.go           # read / reply (uses --thread on both)
-│   │   ├── canvas.go           # create / read / update / list / delete / share / unshare
+│   │   ├── canvas.go           # create / read / update / list / delete / share / unshare /
+│   │   │                       # create-channel
 │   │   ├── channel.go          # create / archive / invite / topic / list / info /
 │   │   │                       # members / join / leave / purpose / kick / rename /
 │   │   │                       # unarchive / open / mark / close
 │   │   ├── list.go             # Slack Lists: create / read / add-item / update-item /
-│   │   │                       # delete-item / update; injectRowID helper
+│   │   │                       # delete-item / update / item-info / delete-items /
+│   │   │                       # share / unshare / export; injectRowID helper
 │   │   ├── user.go             # info / profile / list / by-email / presence /
 │   │   │                       # channels / set-profile / set-photo / delete-photo /
 │   │   │                       # set-presence
@@ -449,11 +453,12 @@ Runtime state:
   (Apple Developer Program, paid yearly) is judged not worth it for a CLI;
   revisit only on a strong external driver such as an official
   `homebrew/cask` submission (which requires notarization).
-- **Canvas read loses code-block language**: Slack's HTML route does
-  not carry the original triple-backtick language hint. Inherent.
+- **Canvas read loses code-block language** with `--source html`: Slack's
+  HTML route does not carry the original triple-backtick language hint.
 - **No whole-List delete**: `slackLists.delete` does not exist on the
   public API, so a whole List must be cleaned in the Slack UI. Individual
-  rows are deletable via `list delete-item` (`slackLists.items.delete`).
+  rows are deletable via `list delete-item` (`slackLists.items.delete`)
+  or `list delete-items` (`slackLists.items.deleteMultiple`).
 - **Scheduled-message cancel race**: `chat.deleteScheduledMessage` may
   return `ok=true` for schedules within ~5 minutes of `post_at` yet the
   message still posts. Slack-side queue lock; documented in README.
