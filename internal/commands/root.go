@@ -35,6 +35,7 @@ func NewRootCommand(version string) *cobra.Command {
 		newEmojiCommand(g),
 		newDndCommand(g),
 		newUsergroupCommand(g),
+		newSlackbotSkillCommand(g),
 		newVersionCommand(g, version),
 		newGenerateSkillsCommand(version),
 		newGenerateManifestCommand(),
