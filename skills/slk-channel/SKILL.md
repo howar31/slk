@@ -2,7 +2,7 @@
 name: slk-channel
 description: "List and manage channels"
 metadata:
-  version: 0.9.1
+  version: 0.10.0
   openclaw:
     category: "productivity"
     requires:
